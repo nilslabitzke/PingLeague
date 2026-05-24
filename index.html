@@ -1223,28 +1223,48 @@ function esc(str) {
 let _initialized = false;
 
 async function init() {
-  // Auth state listener (handles login/logout during the session)
-  db.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'SIGNED_OUT') {
-      S.user = null; S.player = null; S.isAdmin = false;
-      _initialized = false;
+  // Safety net: if loading takes > 10 s, fall back to auth page
+  const loadingTimer = setTimeout(() => {
+    if (!_initialized) {
+      console.warn('PingLeague: loading timeout — showing auth page');
       showPage('auth');
-    } else if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user) {
-      if (!_initialized || S.user?.id !== session.user.id) {
-        _initialized = true;
-        await setupUser(session.user);
-      }
     }
-  });
+  }, 10000);
 
-  // Check existing session (critical for Safari and hard reloads)
-  const { data: { session }, error } = await db.auth.getSession();
-  if (error) console.error('getSession error:', error);
+  try {
+    // Auth state listener — handles all events including INITIAL_SESSION (Safari/Firefox)
+    db.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_OUT') {
+        S.user = null; S.player = null; S.isAdmin = false;
+        _initialized = false;
+        clearTimeout(loadingTimer);
+        showPage('auth');
+      } else if (session?.user &&
+        (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED')) {
+        if (!_initialized || S.user?.id !== session.user.id) {
+          _initialized = true;
+          clearTimeout(loadingTimer);
+          await setupUser(session.user);
+        }
+      }
+    });
 
-  if (session?.user) {
-    _initialized = true;
-    await setupUser(session.user);
-  } else {
+    // Explicit session check — critical for Safari & hard reloads
+    const { data: { session }, error } = await db.auth.getSession();
+    if (error) console.error('getSession:', error);
+
+    if (session?.user && !_initialized) {
+      _initialized = true;
+      clearTimeout(loadingTimer);
+      await setupUser(session.user);
+    } else if (!session?.user && !_initialized) {
+      clearTimeout(loadingTimer);
+      showPage('auth');
+    }
+
+  } catch (err) {
+    console.error('PingLeague init error:', err);
+    clearTimeout(loadingTimer);
     showPage('auth');
   }
 
