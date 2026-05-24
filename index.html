@@ -486,7 +486,8 @@ async function initApp() {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('main-app').style.display = 'grid';
 
-  const { data: p } = await db.from('players').select('*').eq('user_id', currentUser.id).single();
+  const { data: players, error } = await db.from('players').select('*').eq('user_id', currentUser.id);
+  const p = players?.[0] || null;
   currentPlayer = p;
 
   document.getElementById('user-name').textContent = p?.name || currentUser.email;
