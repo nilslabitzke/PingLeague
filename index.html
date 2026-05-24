@@ -3,262 +3,91 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>TT Ranking</title>
+<title>PingLeague</title>
 <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
 <style>
-  /* ── CONFIG: Trag hier deine Supabase-Daten ein ── */
-  :root {
-    --supabase-url: '';
-    --supabase-key: '';
-  }
-
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
   :root {
-    --bg: #0e0f11;
-    --bg2: #161719;
-    --bg3: #1e1f23;
-    --border: rgba(255,255,255,0.07);
-    --border2: rgba(255,255,255,0.13);
-    --text: #f0f0f0;
-    --text2: #888;
-    --text3: #555;
-    --green: #22c55e;
-    --green-dim: rgba(34,197,94,0.12);
-    --red: #ef4444;
-    --red-dim: rgba(239,68,68,0.12);
-    --gold: #f59e0b;
-    --gold-dim: rgba(245,158,11,0.12);
-    --blue: #3b82f6;
-    --blue-dim: rgba(59,130,246,0.12);
-    --radius: 10px;
-    --radius-lg: 14px;
+    --bg: #0e0f11; --bg2: #161719; --bg3: #1e1f23;
+    --border: rgba(255,255,255,0.07); --border2: rgba(255,255,255,0.13);
+    --text: #f0f0f0; --text2: #888; --text3: #555;
+    --green: #22c55e; --green-dim: rgba(34,197,94,0.12);
+    --red: #ef4444; --red-dim: rgba(239,68,68,0.12);
+    --gold: #f59e0b; --gold-dim: rgba(245,158,11,0.12);
+    --blue: #3b82f6; --blue-dim: rgba(59,130,246,0.12);
+    --radius: 10px; --radius-lg: 14px;
   }
-
-  body {
-    font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    font-size: 14px;
-    line-height: 1.5;
-  }
-
-  /* Layout */
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; font-size: 14px; line-height: 1.5; }
   .app { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
   @media (max-width: 700px) { .app { grid-template-columns: 1fr; } }
-
-  /* Sidebar */
-  .sidebar {
-    background: var(--bg2);
-    border-right: 1px solid var(--border);
-    padding: 1.5rem 1rem;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    position: sticky;
-    top: 0;
-    height: 100vh;
-  }
-  .logo {
-    font-size: 17px;
-    font-weight: 700;
-    letter-spacing: -0.5px;
-    color: var(--text);
-    padding: 0 8px;
-    margin-bottom: 1.5rem;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
+  .sidebar { background: var(--bg2); border-right: 1px solid var(--border); padding: 1.5rem 1rem; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 0; height: 100vh; }
+  .logo { font-size: 17px; font-weight: 700; letter-spacing: -0.5px; color: var(--text); padding: 0 8px; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 8px; }
   .logo span { color: var(--green); }
-  .nav-btn {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 9px 10px;
-    border-radius: var(--radius);
-    border: none;
-    background: transparent;
-    color: var(--text2);
-    font-size: 13px;
-    cursor: pointer;
-    text-align: left;
-    width: 100%;
-    transition: all .15s;
-  }
+  .nav-btn { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: var(--radius); border: none; background: transparent; color: var(--text2); font-size: 13px; cursor: pointer; text-align: left; width: 100%; transition: all .15s; }
   .nav-btn:hover { background: var(--bg3); color: var(--text); }
   .nav-btn.active { background: var(--green-dim); color: var(--green); }
   .nav-btn svg { width: 16px; height: 16px; flex-shrink: 0; }
   .sidebar-bottom { margin-top: auto; }
-  .user-chip {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
-    border-radius: var(--radius);
-    background: var(--bg3);
-    border: 1px solid var(--border);
-  }
-  .avatar {
-    width: 28px; height: 28px;
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 11px; font-weight: 700;
-    flex-shrink: 0;
-  }
+  .user-chip { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--radius); background: var(--bg3); border: 1px solid var(--border); }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
   .user-name { font-size: 12px; color: var(--text); font-weight: 500; }
   .user-email { font-size: 11px; color: var(--text2); }
-
-  /* Main */
   .main { padding: 2rem; overflow-y: auto; }
   .page { display: none; }
   .page.active { display: block; }
-  .page-title {
-    font-size: 22px;
-    font-weight: 700;
-    letter-spacing: -0.5px;
-    margin-bottom: 1.5rem;
-    color: var(--text);
-  }
-
-  /* Cards */
-  .card {
-    background: var(--bg2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 1.25rem 1.5rem;
-    margin-bottom: 1rem;
-  }
+  .page-title { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 1.5rem; color: var(--text); }
+  .card { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1.25rem 1.5rem; margin-bottom: 1rem; }
   .card h3 { font-size: 13px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 1rem; }
-
-  /* Stats grid */
   .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 1.5rem; }
   @media (max-width: 700px) { .stats { grid-template-columns: repeat(2,1fr); } }
   .stat { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 1rem 1.25rem; }
   .stat-val { font-size: 28px; font-weight: 700; letter-spacing: -1px; color: var(--text); }
   .stat-lbl { font-size: 12px; color: var(--text2); margin-top: 2px; }
-
-  /* Leaderboard */
-  .lb-row {
-    display: flex; align-items: center; gap: 12px;
-    padding: 10px 0;
-    border-bottom: 1px solid var(--border);
-  }
+  .lb-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border); }
   .lb-row:last-child { border-bottom: none; }
   .rank { font-size: 12px; font-weight: 700; color: var(--text3); min-width: 28px; }
-  .rank.gold { color: var(--gold); }
-  .rank.silver { color: #aaa; }
-  .rank.bronze { color: #cd7f32; }
+  .rank.gold { color: var(--gold); } .rank.silver { color: #aaa; } .rank.bronze { color: #cd7f32; }
   .player-name { flex: 1; font-size: 14px; font-weight: 600; color: var(--text); }
   .player-sub { font-size: 11px; color: var(--text2); margin-top: 1px; }
-  .elo-badge {
-    font-size: 15px; font-weight: 700;
-    letter-spacing: -0.5px;
-    color: var(--text);
-    min-width: 52px; text-align: right;
-  }
-  .tier-pill {
-    font-size: 10px; font-weight: 700;
-    padding: 2px 8px; border-radius: 100px;
-    letter-spacing: .3px;
-  }
+  .elo-badge { font-size: 15px; font-weight: 700; letter-spacing: -0.5px; color: var(--text); min-width: 52px; text-align: right; }
+  .tier-pill { font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 100px; letter-spacing: .3px; }
   .t-bronze { background: rgba(205,127,50,.15); color: #cd7f32; }
   .t-silver { background: rgba(170,170,170,.12); color: #aaa; }
   .t-gold { background: var(--gold-dim); color: var(--gold); }
   .t-plat { background: var(--blue-dim); color: var(--blue); }
   .t-diamond { background: rgba(167,139,250,.15); color: #a78bfa; }
-
-  /* Form */
   .form-group { margin-bottom: 1rem; }
   .form-group label { display: block; font-size: 12px; color: var(--text2); margin-bottom: 6px; font-weight: 500; }
-  input, select {
-    width: 100%;
-    background: var(--bg3);
-    border: 1px solid var(--border2);
-    border-radius: var(--radius);
-    padding: 9px 12px;
-    color: var(--text);
-    font-size: 14px;
-    outline: none;
-    transition: border .15s;
-  }
+  input, select { width: 100%; background: var(--bg3); border: 1px solid var(--border2); border-radius: var(--radius); padding: 9px 12px; color: var(--text); font-size: 14px; outline: none; transition: border .15s; }
   input:focus, select:focus { border-color: var(--green); }
   select option { background: var(--bg3); }
-
-  .btn {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 9px 18px;
-    border-radius: var(--radius);
-    border: 1px solid var(--border2);
-    background: transparent;
-    color: var(--text);
-    font-size: 13px; font-weight: 500;
-    cursor: pointer; transition: all .15s;
-  }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 18px; border-radius: var(--radius); border: 1px solid var(--border2); background: transparent; color: var(--text); font-size: 13px; font-weight: 500; cursor: pointer; transition: all .15s; }
   .btn:hover { background: var(--bg3); }
   .btn.primary { background: var(--green); color: #000; border-color: var(--green); font-weight: 700; }
   .btn.primary:hover { background: #16a34a; }
   .btn.danger { color: var(--red); border-color: rgba(239,68,68,.3); }
   .btn.danger:hover { background: var(--red-dim); }
-  .btn:disabled { opacity: .4; cursor: not-allowed; }
-
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
   @media (max-width: 600px) { .grid2 { grid-template-columns: 1fr; } }
-
-  /* Match sets */
-  .set-row {
-    display: flex; align-items: center; gap: 10px;
-    padding: 8px 12px;
-    background: var(--bg3);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    margin-bottom: 8px;
-  }
+  .set-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 8px; }
   .set-label { font-size: 12px; color: var(--text2); min-width: 44px; }
   .set-in { width: 60px; text-align: center; margin: 0; padding: 6px 8px; }
   .vs-sep { font-size: 11px; color: var(--text3); font-weight: 700; }
-
-  /* Alert */
   .alert { padding: 10px 14px; border-radius: var(--radius); font-size: 13px; margin-bottom: 1rem; }
   .alert-ok { background: var(--green-dim); color: var(--green); border: 1px solid rgba(34,197,94,.2); }
   .alert-err { background: var(--red-dim); color: var(--red); border: 1px solid rgba(239,68,68,.2); }
-
-  /* Preview */
-  .preview {
-    padding: 10px 14px;
-    background: var(--bg3); border: 1px solid var(--border);
-    border-radius: var(--radius);
-    font-size: 13px; color: var(--text2);
-    margin: 12px 0; display: none;
-  }
+  .preview { padding: 10px 14px; background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; color: var(--text2); margin: 12px 0; display: none; }
   .preview strong { color: var(--text); }
-
-  /* History */
-  .hist-row {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 0; border-bottom: 1px solid var(--border);
-    font-size: 13px;
-  }
+  .hist-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
   .hist-row:last-child { border-bottom: none; }
   .win-badge { background: var(--green-dim); color: var(--green); padding: 2px 8px; border-radius: 100px; font-size: 11px; font-weight: 700; }
   .loss-badge { background: var(--red-dim); color: var(--red); padding: 2px 8px; border-radius: 100px; font-size: 11px; font-weight: 700; }
-
-  /* Auth */
-  .auth-wrap {
-    min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    background: var(--bg);
-  }
-  .auth-box {
-    background: var(--bg2); border: 1px solid var(--border);
-    border-radius: var(--radius-lg); padding: 2.5rem;
-    width: 100%; max-width: 380px;
-  }
+  .auth-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg); }
+  .auth-box { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 2.5rem; width: 100%; max-width: 380px; }
   .auth-title { font-size: 22px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: .25rem; }
   .auth-sub { font-size: 13px; color: var(--text2); margin-bottom: 2rem; }
   .auth-switch { font-size: 13px; color: var(--text2); margin-top: 1rem; text-align: center; }
   .auth-switch a { color: var(--green); cursor: pointer; text-decoration: none; }
-
   .empty { text-align: center; color: var(--text3); padding: 2rem; font-size: 13px; }
   .loading { text-align: center; color: var(--text2); padding: 1.5rem; font-size: 13px; }
   hr { border: none; border-top: 1px solid var(--border); margin: 1.25rem 0; }
@@ -266,10 +95,10 @@
 </head>
 <body>
 
-<!-- ── AUTH SCREEN ─────────────────────────────── -->
-<div class="auth-wrap" id="auth-screen">
+<!-- AUTH -->
+<div class="auth-wrap" id="auth-screen" style="display:none">
   <div class="auth-box">
-    <div class="auth-title">🏓 TT Ranking</div>
+    <div class="auth-title">🏓 PingLeague</div>
     <div class="auth-sub" id="auth-sub">Melde dich an, um fortzufahren.</div>
     <div id="auth-alert"></div>
     <div id="auth-login">
@@ -289,10 +118,10 @@
   </div>
 </div>
 
-<!-- ── MAIN APP ────────────────────────────────── -->
+<!-- APP -->
 <div class="app" id="main-app" style="display:none">
   <aside class="sidebar">
-    <div class="logo">🏓 <span>TT</span>Ranking</div>
+    <div class="logo">🏓 <span>Ping</span>League</div>
     <button class="nav-btn active" onclick="nav('leaderboard',this)">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
       Rangliste
@@ -310,7 +139,7 @@
       Admin
     </button>
     <div class="sidebar-bottom">
-      <div class="user-chip" id="user-chip">
+      <div class="user-chip">
         <div class="avatar" id="user-avatar" style="background:#1e3a2f;color:#22c55e">?</div>
         <div>
           <div class="user-name" id="user-name">—</div>
@@ -322,7 +151,6 @@
   </aside>
 
   <main class="main">
-    <!-- LEADERBOARD -->
     <div id="page-leaderboard" class="page active">
       <div class="page-title">Rangliste</div>
       <div class="stats">
@@ -337,7 +165,6 @@
       </div>
     </div>
 
-    <!-- MATCH -->
     <div id="page-match" class="page">
       <div class="page-title">Match eintragen</div>
       <div class="card">
@@ -370,7 +197,6 @@
       </div>
     </div>
 
-    <!-- HISTORY -->
     <div id="page-history" class="page">
       <div class="page-title">Matchverlauf</div>
       <div class="card">
@@ -379,7 +205,6 @@
       </div>
     </div>
 
-    <!-- ADMIN -->
     <div id="page-admin" class="page">
       <div class="page-title">Admin</div>
       <div class="card">
@@ -399,12 +224,8 @@
 </div>
 
 <script>
-// ══════════════════════════════════════════════
-// ⚙️  KONFIGURATION — hier deine Supabase-Daten
-// ══════════════════════════════════════════════
 const SUPABASE_URL = 'https://xsxsyfaxhwrbllvvfxxm.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzeHN5ZmF4aHdyYmxsdnZmeHhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MTM1NzIsImV4cCI6MjA5NTE4OTU3Mn0.y35dDJTrkCNMU7P0V4H8iSMprITdRst9kl7B5_BMvc8';
-// ══════════════════════════════════════════════
 
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -420,19 +241,14 @@ const TIERS = [
   { name: 'Platin',  min: 1500, cls: 't-plat'   },
   { name: 'Diamant', min: 1700, cls: 't-diamond' }
 ];
-function getTier(elo) {
-  let t = TIERS[0];
-  for (const x of TIERS) { if (elo >= x.min) t = x; }
-  return t;
-}
+function getTier(elo) { let t=TIERS[0]; for(const x of TIERS){if(elo>=x.min)t=x;} return t; }
 function initials(n) { return n.split(' ').map(x=>x[0]).join('').toUpperCase().slice(0,2); }
 function color(n) {
-  const cols = ['#22c55e','#3b82f6','#f59e0b','#ec4899','#8b5cf6','#06b6d4','#f97316'];
-  let h = 0; for (let i=0;i<n.length;i++) h = n.charCodeAt(i)+((h<<5)-h);
+  const cols=['#22c55e','#3b82f6','#f59e0b','#ec4899','#8b5cf6','#06b6d4','#f97316'];
+  let h=0; for(let i=0;i<n.length;i++) h=n.charCodeAt(i)+((h<<5)-h);
   return cols[Math.abs(h)%cols.length];
 }
 
-// ─── Auth ────────────────────────────────────
 function showReg() {
   document.getElementById('auth-login').style.display='none';
   document.getElementById('auth-register').style.display='block';
@@ -464,59 +280,71 @@ async function doRegister() {
   if (!name||!email||!pw) return setAuthAlert('Bitte alle Pflichtfelder ausfüllen.');
   const { data, error } = await db.auth.signUp({ email, password: pw });
   if (error) return setAuthAlert(error.message);
-  // Create player profile
-  await db.from('players').insert({ user_id: data.user.id, name, club: club||null, elo: 1200 });
+  if (data?.user) {
+    await db.from('players').insert({ user_id: data.user.id, name, club: club||null, elo: 1200 });
+  }
   setAuthAlert('Konto erstellt! Du wirst eingeloggt…', true);
 }
 
 async function doLogout() {
   await db.auth.signOut();
-  location.reload();
+  currentUser = null;
+  currentPlayer = null;
+  document.getElementById('main-app').style.display = 'none';
+  document.getElementById('auth-screen').style.display = 'flex';
+  showLogin();
 }
 
-db.auth.onAuthStateChange(async (event, session) => {
-  if (session) {
-    currentUser = session.user;
-    await initApp();
-  } else {
-    document.getElementById('auth-screen').style.display = 'flex';
-    document.getElementById('main-app').style.display = 'none';
-  }
-});
-
-// Beim Laden prüfen ob Session existiert
-db.auth.getSession().then(async ({ data: { session } }) => {
-  if (session) {
-    currentUser = session.user;
-    await initApp();
-  } else {
-    document.getElementById('auth-screen').style.display = 'flex';
-    document.getElementById('main-app').style.display = 'none';
-  }
-});
-
-// ─── App init ────────────────────────────────
 async function initApp() {
   document.getElementById('auth-screen').style.display = 'none';
   document.getElementById('main-app').style.display = 'grid';
 
-  const { data: players, error } = await db.from('players').select('*').eq('user_id', currentUser.id);
-  const p = players?.[0] || null;
+  // Spielerprofil laden
+  const { data: players } = await db.from('players').select('*').eq('user_id', currentUser.id);
+  const p = players && players.length > 0 ? players[0] : null;
   currentPlayer = p;
 
   document.getElementById('user-name').textContent = p?.name || currentUser.email;
   document.getElementById('user-email').textContent = currentUser.email;
   const av = document.getElementById('user-avatar');
-  const c = color(p?.name||'?');
-  av.textContent = initials(p?.name||'?');
-  av.style.background = c+'22'; av.style.color = c;
+  const c = color(p?.name || '?');
+  av.textContent = initials(p?.name || '?');
+  av.style.background = c+'22';
+  av.style.color = c;
 
-  if (p?.is_admin) document.getElementById('admin-nav-btn').style.display = 'flex';
+  if (p?.is_admin) {
+    document.getElementById('admin-nav-btn').style.display = 'flex';
+  }
 
   await loadLeaderboard();
 }
 
-// ─── Navigation ──────────────────────────────
+// Session beim Start prüfen
+async function checkSession() {
+  const { data: { session } } = await db.auth.getSession();
+  if (session) {
+    currentUser = session.user;
+    await initApp();
+  } else {
+    document.getElementById('auth-screen').style.display = 'flex';
+    document.getElementById('main-app').style.display = 'none';
+  }
+}
+
+// Auth state listener für Login/Logout Events
+db.auth.onAuthStateChange(async (event, session) => {
+  if (event === 'SIGNED_IN' && session) {
+    currentUser = session.user;
+    await initApp();
+  } else if (event === 'SIGNED_OUT') {
+    document.getElementById('auth-screen').style.display = 'flex';
+    document.getElementById('main-app').style.display = 'none';
+  }
+});
+
+// App starten
+checkSession();
+
 function nav(page, btn) {
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
@@ -528,7 +356,6 @@ function nav(page, btn) {
   if (page==='admin') loadAdmin();
 }
 
-// ─── Elo ─────────────────────────────────────
 function eloExpected(a,b) { return 1/(1+Math.pow(10,(b-a)/400)); }
 async function getSettings() {
   const { data } = await db.from('settings').select('*').single();
@@ -536,7 +363,6 @@ async function getSettings() {
 }
 function calcK(p, s) { return p.matches < 30 ? s.k_high : s.k_low; }
 
-// ─── Leaderboard ─────────────────────────────
 async function loadLeaderboard() {
   const { data: players } = await db.from('players').select('*').order('elo', { ascending: false });
   const { count } = await db.from('matches').select('*', { count: 'exact', head: true });
@@ -568,7 +394,6 @@ async function loadLeaderboard() {
   }).join('');
 }
 
-// ─── Match ───────────────────────────────────
 function populateMatchSelects() {
   ['m-p1','m-p2'].forEach(id => {
     const s = document.getElementById(id);
@@ -619,15 +444,10 @@ async function submitMatch() {
   const pid1 = al('m-p1').value, pid2 = al('m-p2').value;
   if (!pid1||!pid2) return showAlert('Bitte beide Spieler auswählen.');
   if (pid1===pid2) return showAlert('Spieler müssen verschieden sein.');
-
-  const rawSets = [
-    [al('s1p1').value, al('s1p2').value],
-    [al('s2p1').value, al('s2p2').value]
-  ];
+  const rawSets = [[al('s1p1').value,al('s1p2').value],[al('s2p1').value,al('s2p2').value]];
   if (document.getElementById('s3-row').style.display!=='none')
-    rawSets.push([al('s3p1').value, al('s3p2').value]);
-
-  let w1=0, w2=0; const sets=[];
+    rawSets.push([al('s3p1').value,al('s3p2').value]);
+  let w1=0,w2=0; const sets=[];
   for (const [a,b] of rawSets) {
     if (a===''||b==='') break;
     const v = validateSet(a,b);
@@ -637,7 +457,6 @@ async function submitMatch() {
   }
   if (sets.length<2) return showAlert('Mindestens 2 Sätze eintragen.');
   if (w1<2&&w2<2) return showAlert('Kein Sieger ermittelbar (2 Gewinnsätze nötig).');
-
   const winner = allPlayers.find(p=>p.id===(w1>w2?pid1:pid2));
   const loser  = allPlayers.find(p=>p.id===(w1>w2?pid2:pid1));
   const s = await getSettings();
@@ -646,8 +465,6 @@ async function submitMatch() {
   const delta = Math.round(kW*(1-ea));
   const loserDelta = Math.round(kL*ea);
   const eloW1 = winner.elo+delta, eloL1 = loser.elo-loserDelta;
-
-  // Insert match
   const { error: mErr } = await db.from('matches').insert({
     winner_id: winner.id, loser_id: loser.id, sets,
     elo_winner_before: winner.elo, elo_loser_before: loser.elo,
@@ -655,11 +472,8 @@ async function submitMatch() {
     created_by: currentUser.id
   });
   if (mErr) return showAlert('Fehler: '+mErr.message);
-
-  // Update elos
   await db.from('players').update({ elo: eloW1, matches: winner.matches+1, wins: winner.wins+1 }).eq('id', winner.id);
   await db.from('players').update({ elo: eloL1, matches: loser.matches+1, losses: loser.losses+1 }).eq('id', loser.id);
-
   showAlert(`🏆 ${winner.name} gewinnt! Elo: +${delta} → ${eloW1} | ${loser.name}: −${loserDelta} → ${eloL1}`, true);
   ['s1p1','s1p2','s2p1','s2p2','s3p1','s3p2'].forEach(id=>{const e=document.getElementById(id);if(e)e.value='';});
   document.getElementById('s3-row').style.display='none';
@@ -669,20 +483,16 @@ async function submitMatch() {
   setTimeout(()=>al('match-alert').innerHTML='', 5000);
 }
 
-// ─── History ─────────────────────────────────
 async function loadHistory() {
   const filter = document.getElementById('hist-filter').value;
   const sel = document.getElementById('hist-filter');
   sel.innerHTML = '<option value="">Alle Spieler</option>';
   allPlayers.forEach(p=>{ sel.innerHTML+=`<option value="${p.id}"${p.id===filter?' selected':''}>${p.name}</option>`; });
-
   let q = db.from('matches').select('*').order('played_at', { ascending: false }).limit(50);
   if (filter) q = q.or(`winner_id.eq.${filter},loser_id.eq.${filter}`);
   const { data: matches } = await q;
-
   const el = document.getElementById('hist-list');
   if (!matches?.length) { el.innerHTML='<div class="empty">Keine Matches gefunden.</div>'; return; }
-
   const pMap = Object.fromEntries(allPlayers.map(p=>[p.id,p]));
   el.innerHTML = matches.map(m => {
     const w = pMap[m.winner_id], l = pMap[m.loser_id];
@@ -691,7 +501,7 @@ async function loadHistory() {
     const isWin = filter && m.winner_id===filter;
     const badge = filter ? (isWin?'<span class="win-badge">Sieg</span>':'<span class="loss-badge">Niederlage</span>') : '';
     return `<div class="hist-row">
-      <div style="flex:1">${badge} <strong>${w?.name||'?'}</strong> <span style="color:var(--text2)">beat</span> <strong>${l?.name||'?'}</strong>
+      <div style="flex:1">${badge} <strong>${w?.name||'?'}</strong> <span style="color:var(--text2)">schlug</span> <strong>${l?.name||'?'}</strong>
         <span style="color:var(--text3);font-size:12px;margin-left:6px">${score}</span></div>
       <span style="color:var(--text2)">${d}</span>
       <span style="color:var(--green);font-size:12px">+${m.elo_delta}</span>
@@ -699,12 +509,10 @@ async function loadHistory() {
   }).join('');
 }
 
-// ─── Admin ───────────────────────────────────
 async function loadAdmin() {
   const s = await getSettings();
   document.getElementById('k-high').value = s.k_high;
   document.getElementById('k-low').value = s.k_low;
-
   const el = document.getElementById('admin-players');
   if (!allPlayers.length) { el.innerHTML='<div class="empty">Keine Spieler.</div>'; return; }
   el.innerHTML = allPlayers.map(p=>`
