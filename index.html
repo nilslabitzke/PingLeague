@@ -695,8 +695,8 @@ async function openProfile(playerId) {
       <div class="profile-name">${esc(p.name)}</div>
       ${p.club?`<div class="profile-club">${esc(p.club)}</div>`:''}
       <div class="profile-badges">
-        <span class="level-badge" style="color:${col};background:${col}22">${lvl.toFixed(1)} ${levelLabel(lvl)}</span>
-        <span style="font-size:.78rem;color:var(--text-muted)">Elo ${p.elo}</span>
+        <button class="level-badge" style="color:${col};background:${col}22;border:none;cursor:pointer;font-size:.78rem;" title="Tippe für Elo" onclick="const s=this.nextElementSibling;s.style.display=s.style.display==='inline'?'none':'inline'">${lvl.toFixed(1)} ${levelLabel(lvl)} ▾</button>
+        <span style="font-size:.78rem;color:var(--text-muted);display:none">Elo ${p.elo}</span>
       </div>
     </div>
     <button onclick="closeProfile()" style="margin-left:auto;background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;line-height:1">✕</button>`;
@@ -708,7 +708,7 @@ async function openProfile(playerId) {
       <div class="pstat"><div class="pstat-val" style="color:var(--error)">${p.losses}</div><div class="pstat-label">Niederl.</div></div>
       <div class="pstat"><div class="pstat-val">${wr}%</div><div class="pstat-label">Quote</div></div>
     </div>
-    <div class="profile-section-title">Elo-Verlauf</div>
+    <div class="profile-section-title">Level-Verlauf</div>
     <div class="chart-wrap" id="profile-chart"><div class="text-muted text-center" style="font-size:.88rem">Lade Chart…</div></div>
     <div class="profile-section-title">Letzte Matches</div>
     <div id="profile-matches"><div class="text-muted" style="font-size:.88rem">Lade…</div></div>
