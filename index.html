@@ -7,398 +7,276 @@
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
     :root {
-      --bg:          #0d0d14;
-      --surface:     #14141e;
-      --card:        #1c1c2a;
-      --card-hover:  #232334;
-      --border:      #2a2a3f;
-      --primary:     #7c7cf8;
-      --primary-lt:  #a5a5fb;
-      --primary-dk:  #5555d6;
-      --text:        #e8e8f2;
-      --text-muted:  #6868a0;
-      --text-dim:    #44445a;
-      --success:     #3dd68c;
-      --error:       #ff6b6b;
-      --warn:        #ffd93d;
-      --bronze:      #cd8b3e;
-      --silver:      #9eb0c8;
-      --gold:        #f0c040;
-      --platinum:    #90b8f0;
-      --diamond:     #40d8f8;
-      --radius:      10px;
-      --radius-sm:   6px;
+      --bg:#0d0d14; --surface:#14141e; --card:#1c1c2a; --card-hover:#232334;
+      --border:#2a2a3f; --primary:#7c7cf8; --primary-lt:#a5a5fb; --primary-dk:#5555d6;
+      --text:#e8e8f2; --text-muted:#6868a0; --text-dim:#44445a;
+      --success:#3dd68c; --error:#ff6b6b; --warn:#ffd93d;
+      --bronze:#cd8b3e; --silver:#9eb0c8; --gold:#f0c040; --platinum:#90b8f0; --diamond:#40d8f8;
+      --radius:10px; --radius-sm:6px;
+    }
+    body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; font-size:15px; line-height:1.5; min-height:100vh; }
+
+    /* LOADING */
+    #loading { display:flex; align-items:center; justify-content:center; height:100vh; gap:1rem; color:var(--text-muted); font-size:1.1rem; }
+
+    /* AUTH */
+    #auth-page { display:none; min-height:100vh; align-items:center; justify-content:center; padding:1.5rem; }
+    .auth-wrap { width:100%; max-width:400px; }
+    .auth-logo { text-align:center; margin-bottom:2rem; }
+    .auth-logo h1 { font-size:2.6rem; font-weight:800; background:linear-gradient(135deg,var(--primary),var(--diamond)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+    .auth-logo p { color:var(--text-muted); margin-top:.3rem; }
+    .auth-tabs { display:flex; background:var(--surface); border-radius:var(--radius); padding:4px; margin-bottom:1.5rem; border:1px solid var(--border); }
+    .auth-tab { flex:1; padding:.55rem 1rem; border:none; background:none; color:var(--text-muted); cursor:pointer; border-radius:calc(var(--radius) - 2px); font-size:.95rem; font-weight:500; transition:all .2s; }
+    .auth-tab.active { background:var(--card); color:var(--text); }
+    .auth-form { background:var(--card); border-radius:var(--radius); padding:1.75rem; border:1px solid var(--border); }
+
+    /* FORMS */
+    .form-group { margin-bottom:1rem; }
+    .form-group label { display:block; margin-bottom:.4rem; font-size:.8rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+    .form-group input, .form-group select { width:100%; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:.6rem .85rem; color:var(--text); font-size:.95rem; outline:none; transition:border-color .2s; -webkit-appearance:none; appearance:none; }
+    .form-group input:focus, .form-group select:focus { border-color:var(--primary); }
+    .form-group input::placeholder { color:var(--text-dim); }
+    .form-group select { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236868a0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right .75rem center; padding-right:2.25rem; }
+    .form-group select option { background:#1c1c2a; color:var(--text); }
+
+    /* BUTTONS */
+    .btn { display:inline-flex; align-items:center; justify-content:center; gap:.5rem; padding:.6rem 1.2rem; border:none; border-radius:var(--radius-sm); font-size:.9rem; font-weight:600; cursor:pointer; transition:all .2s; white-space:nowrap; }
+    .btn-primary { background:var(--primary); color:white; } .btn-primary:hover { background:var(--primary-dk); }
+    .btn-secondary { background:var(--surface); color:var(--text); border:1px solid var(--border); } .btn-secondary:hover { background:var(--card-hover); }
+    .btn-danger { background:rgba(255,107,107,.15); color:var(--error); border:1px solid rgba(255,107,107,.25); } .btn-danger:hover { background:rgba(255,107,107,.25); }
+    .btn-success { background:var(--success); color:#0a1f13; } .btn-success:hover { filter:brightness(.9); }
+    .btn-full { width:100%; } .btn:disabled { opacity:.5; cursor:not-allowed; }
+    .btn-sm { padding:.35rem .7rem; font-size:.8rem; }
+
+    /* ALERTS */
+    .alert { padding:.7rem 1rem; border-radius:var(--radius-sm); margin-bottom:1rem; font-size:.88rem; }
+    .alert-error   { background:rgba(255,107,107,.12); border:1px solid rgba(255,107,107,.3); color:var(--error); }
+    .alert-success { background:rgba(61,214,140,.12);  border:1px solid rgba(61,214,140,.3);  color:var(--success); }
+    .alert-info    { background:rgba(124,124,248,.12); border:1px solid rgba(124,124,248,.3); color:var(--primary-lt); }
+
+    /* HEADER */
+    #app-page { display:none; }
+    header { background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:100; }
+    .header-inner { max-width:1100px; margin:0 auto; padding:0 1rem; display:flex; align-items:center; gap:1rem; height:58px; }
+    .logo { font-size:1.25rem; font-weight:800; white-space:nowrap; flex-shrink:0; background:linear-gradient(135deg,var(--primary),var(--diamond)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
+    nav.top-nav { display:flex; gap:.2rem; flex:1; overflow-x:auto; scrollbar-width:none; }
+    nav.top-nav::-webkit-scrollbar { display:none; }
+    .nav-btn { padding:.45rem .9rem; background:none; border:none; color:var(--text-muted); cursor:pointer; border-radius:var(--radius-sm); font-size:.88rem; font-weight:500; white-space:nowrap; transition:all .2s; }
+    .nav-btn:hover { background:var(--card); color:var(--text); }
+    .nav-btn.active { background:var(--card); color:var(--text); }
+    .user-area { display:flex; align-items:center; gap:.6rem; flex-shrink:0; }
+    #header-user-name { font-size:.82rem; color:var(--text-muted); display:none; max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    @media(min-width:560px) { #header-user-name { display:block; } }
+
+    /* BOTTOM NAV (mobile) */
+    .bottom-nav { display:none; position:fixed; bottom:0; left:0; right:0; z-index:100; background:var(--surface); border-top:1px solid var(--border); padding:.4rem .5rem; padding-bottom:calc(.4rem + env(safe-area-inset-bottom)); }
+    .bottom-nav-inner { display:flex; justify-content:space-around; max-width:600px; margin:0 auto; }
+    .bnav-btn { flex:1; display:flex; flex-direction:column; align-items:center; gap:.15rem; padding:.4rem .3rem; border:none; background:none; color:var(--text-muted); cursor:pointer; border-radius:var(--radius-sm); transition:color .2s; font-size:.68rem; font-weight:600; }
+    .bnav-btn .bnav-icon { font-size:1.25rem; line-height:1; }
+    .bnav-btn.active { color:var(--primary-lt); }
+    @media(max-width:767px) {
+      .top-nav, .user-area #header-user-name { display:none; }
+      .user-area .btn { font-size:.78rem; padding:.35rem .6rem; }
+      .bottom-nav { display:block; }
+      main { padding-bottom:80px; }
     }
 
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      font-size: 15px;
-      line-height: 1.5;
-      min-height: 100vh;
-    }
+    /* MAIN */
+    main { max-width:1100px; margin:0 auto; padding:2rem 1rem; }
+    .view { display:none; animation:fadeSlideIn .22s ease; }
+    .view.active { display:block; }
+    @keyframes fadeSlideIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+    .view-header { margin-bottom:1.5rem; }
+    .view-header h2 { font-size:1.5rem; font-weight:700; }
+    .view-header p { color:var(--text-muted); margin-top:.2rem; font-size:.9rem; }
 
-    /* ── LOADING ── */
-    #loading {
-      display: flex; align-items: center; justify-content: center;
-      height: 100vh; gap: 1rem; color: var(--text-muted); font-size: 1.1rem;
-    }
+    /* MONTHLY WINNER BANNER */
+    .month-banner { background:linear-gradient(135deg,rgba(124,124,248,.15),rgba(64,216,248,.1)); border:1px solid rgba(124,124,248,.25); border-radius:var(--radius); padding:.9rem 1.2rem; margin-bottom:1.25rem; display:flex; align-items:center; gap:1rem; }
+    .month-banner-icon { font-size:2rem; flex-shrink:0; }
+    .month-banner-title { font-size:.75rem; text-transform:uppercase; letter-spacing:.06em; color:var(--primary-lt); font-weight:700; margin-bottom:.1rem; }
+    .month-banner-name { font-size:1.1rem; font-weight:800; color:var(--text); }
+    .month-banner-delta { font-size:.85rem; color:var(--success); font-weight:600; }
 
-    /* ── AUTH ── */
-    #auth-page {
-      display: none; min-height: 100vh;
-      align-items: center; justify-content: center; padding: 1.5rem;
-    }
-    .auth-container { width: 100%; max-width: 400px; }
-    .auth-logo { text-align: center; margin-bottom: 2rem; }
-    .auth-logo h1 {
-      font-size: 2.6rem; font-weight: 800;
-      background: linear-gradient(135deg, var(--primary) 0%, var(--diamond) 100%);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    }
-    .auth-logo p { color: var(--text-muted); margin-top: 0.3rem; }
+    /* RANKING TABLE */
+    .ranking-table-wrapper { overflow-x:auto; border-radius:var(--radius); border:1px solid var(--border); }
+    table { width:100%; border-collapse:collapse; min-width:520px; }
+    thead th { background:var(--card); padding:.7rem 1rem; text-align:left; font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); }
+    tbody tr { border-top:1px solid var(--border); transition:background .15s; cursor:pointer; }
+    tbody tr:hover { background:var(--card-hover); }
+    tbody tr.is-me { background:rgba(124,124,248,.06); }
+    td { padding:.7rem 1rem; font-size:.88rem; }
+    .rank-num { font-weight:700; color:var(--text-muted); }
+    .rank-top { color:var(--gold); }
+    .player-info { display:flex; align-items:center; gap:.7rem; }
+    .avatar { width:34px; height:34px; border-radius:50%; flex-shrink:0; display:flex; align-items:center; justify-content:center; font-size:.8rem; font-weight:700; }
+    .player-name { font-weight:600; font-size:.92rem; }
+    .player-club { font-size:.76rem; color:var(--text-muted); }
+    .level-badge { display:inline-flex; align-items:center; gap:.25rem; padding:.18rem .5rem; border-radius:999px; font-size:.78rem; font-weight:800; }
+    .elo-val { font-weight:700; font-size:1rem; }
+    .form-dots { display:flex; gap:3px; align-items:center; }
+    .fdot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+    .fdot.w { background:var(--success); } .fdot.l { background:var(--error); }
 
-    .auth-tabs {
-      display: flex; background: var(--surface);
-      border-radius: var(--radius); padding: 4px; margin-bottom: 1.5rem;
-      border: 1px solid var(--border);
-    }
-    .auth-tab {
-      flex: 1; padding: 0.55rem 1rem; border: none; background: none;
-      color: var(--text-muted); cursor: pointer;
-      border-radius: calc(var(--radius) - 2px);
-      font-size: 0.95rem; font-weight: 500; transition: all 0.2s;
-    }
-    .auth-tab.active { background: var(--card); color: var(--text); }
+    /* CARD */
+    .card { background:var(--card); border-radius:var(--radius); border:1px solid var(--border); padding:1.5rem; margin-bottom:1rem; }
+    .card-title { font-weight:700; font-size:.95rem; margin-bottom:1.1rem; }
 
-    .auth-form {
-      background: var(--card); border-radius: var(--radius);
-      padding: 1.75rem; border: 1px solid var(--border);
-    }
+    /* MATCH FORM */
+    .match-form { max-width:580px; }
+    .score-row { display:flex; align-items:center; gap:.75rem; margin-bottom:.75rem; }
+    .score-label { font-size:.82rem; color:var(--text-muted); width:52px; flex-shrink:0; font-weight:600; }
+    .score-inputs { display:flex; align-items:center; gap:.6rem; flex:1; }
+    .score-inputs input[type=number] { width:64px; text-align:center; font-size:1.05rem; font-weight:700; padding:.5rem .3rem; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); color:var(--text); outline:none; -moz-appearance:textfield; }
+    .score-inputs input[type=number]::-webkit-inner-spin-button, .score-inputs input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; }
+    .score-inputs input[type=number]:focus { border-color:var(--primary); }
+    .score-sep { color:var(--text-dim); font-weight:700; font-size:1.1rem; }
+    .set-tag { font-size:.76rem; font-weight:600; padding:.2rem .5rem; border-radius:4px; min-width:70px; text-align:center; }
+    .set-tag.win { color:var(--success); background:rgba(61,214,140,.12); }
+    .set-tag.loss { color:var(--error); background:rgba(255,107,107,.12); }
+    .set-tag.invalid { color:var(--text-dim); }
+    #set3-row { display:none; }
 
-    /* ── FORMS ── */
-    .form-group { margin-bottom: 1rem; }
-    .form-group label {
-      display: block; margin-bottom: 0.4rem; font-size: 0.8rem;
-      color: var(--text-muted); font-weight: 600;
-      text-transform: uppercase; letter-spacing: 0.05em;
-    }
-    .form-group input,
-    .form-group select {
-      width: 100%; background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius-sm); padding: 0.6rem 0.85rem;
-      color: var(--text); font-size: 0.95rem; outline: none;
-      transition: border-color 0.2s; -webkit-appearance: none; appearance: none;
-    }
-    .form-group select {
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236868a0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-      background-repeat: no-repeat; background-position: right 0.75rem center;
-      padding-right: 2.25rem;
-    }
-    .form-group input:focus, .form-group select:focus { border-color: var(--primary); }
-    .form-group input::placeholder { color: var(--text-dim); }
-    .form-group select option { background: #1c1c2a; color: var(--text); }
+    /* ELO PREVIEW */
+    .win-bar-wrap { margin-bottom:1.1rem; }
+    .win-bar-labels { display:flex; justify-content:space-between; margin-bottom:.3rem; font-size:.78rem; color:var(--text-muted); }
+    .win-bar { height:8px; background:var(--surface); border-radius:999px; overflow:hidden; }
+    .win-bar-fill { height:100%; border-radius:999px; background:linear-gradient(90deg,var(--primary),var(--diamond)); transition:width .4s ease; }
+    .win-pct { text-align:center; margin-top:.35rem; font-size:1.15rem; font-weight:800; color:var(--primary-lt); }
+    .elo-grid { display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }
+    .elo-tile { background:var(--surface); border-radius:var(--radius-sm); padding:1rem; text-align:center; }
+    .elo-tile-label { font-size:.72rem; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); font-weight:600; margin-bottom:.25rem; }
+    .elo-tile-val { font-size:1.5rem; font-weight:800; }
+    .elo-tile-val.pos { color:var(--success); } .elo-tile-val.neg { color:var(--error); }
+    .elo-tile-sub { font-size:.78rem; color:var(--text-muted); margin-top:.15rem; }
+    #match-result-preview { text-align:center; margin-top:.75rem; font-size:.95rem; min-height:1.4rem; }
 
-    /* ── BUTTONS ── */
-    .btn {
-      display: inline-flex; align-items: center; justify-content: center;
-      gap: 0.5rem; padding: 0.6rem 1.2rem; border: none;
-      border-radius: var(--radius-sm); font-size: 0.9rem; font-weight: 600;
-      cursor: pointer; transition: all 0.2s; white-space: nowrap;
-    }
-    .btn-primary { background: var(--primary); color: white; }
-    .btn-primary:hover { background: var(--primary-dk); }
-    .btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
-    .btn-secondary:hover { background: var(--card-hover); }
-    .btn-danger { background: rgba(255,107,107,0.15); color: var(--error); border: 1px solid rgba(255,107,107,0.25); }
-    .btn-danger:hover { background: rgba(255,107,107,0.25); }
-    .btn-success { background: var(--success); color: #0a1f13; }
-    .btn-success:hover { filter: brightness(0.9); }
-    .btn-full { width: 100%; }
-    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-    .btn-sm { padding: 0.35rem 0.7rem; font-size: 0.8rem; }
+    /* HISTORY */
+    .history-filters { display:flex; gap:.6rem; margin-bottom:1.5rem; flex-wrap:wrap; align-items:center; }
+    .history-filters select { background:var(--card); border:1px solid var(--border); color:var(--text); padding:.5rem 2rem .5rem .75rem; border-radius:var(--radius-sm); font-size:.88rem; outline:none; cursor:pointer; -webkit-appearance:none; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236868a0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right .6rem center; }
+    .history-filters select option { background:#1c1c2a; }
+    .match-card { background:var(--card); border-radius:var(--radius); border:1px solid var(--border); padding:1rem 1.25rem; margin-bottom:.6rem; display:grid; grid-template-columns:1fr auto 1fr; gap:.75rem; align-items:center; }
+    .match-player { font-weight:600; font-size:.9rem; } .match-player.winner { color:var(--success); } .match-player.loser { color:var(--text-muted); }
+    .match-elo { font-size:.76rem; font-weight:600; margin-top:.15rem; } .match-elo.pos { color:var(--success); } .match-elo.neg { color:var(--error); }
+    .match-center { text-align:center; } .match-sets { display:flex; gap:.35rem; justify-content:center; flex-wrap:wrap; margin-bottom:.25rem; }
+    .set-chip { font-size:.74rem; padding:.12rem .4rem; border-radius:3px; background:var(--surface); font-weight:600; }
+    .match-date { font-size:.72rem; color:var(--text-muted); } .match-right { text-align:right; }
 
-    /* ── ALERTS ── */
-    .alert { padding: 0.7rem 1rem; border-radius: var(--radius-sm); margin-bottom: 1rem; font-size: 0.88rem; }
-    .alert-error   { background: rgba(255,107,107,0.12); border: 1px solid rgba(255,107,107,0.3); color: var(--error); }
-    .alert-success { background: rgba(61,214,140,0.12);  border: 1px solid rgba(61,214,140,0.3);  color: var(--success); }
-    .alert-info    { background: rgba(124,124,248,0.12); border: 1px solid rgba(124,124,248,0.3); color: var(--primary-lt); }
+    /* PROFILE MODAL */
+    .profile-overlay { display:none; position:fixed; inset:0; z-index:200; background:rgba(0,0,0,.6); align-items:flex-end; }
+    .profile-overlay.open { display:flex; }
+    .profile-sheet { background:var(--surface); border-radius:16px 16px 0 0; width:100%; max-height:90vh; overflow-y:auto; animation:sheetUp .3s ease; }
+    @keyframes sheetUp { from { transform:translateY(100%); } to { transform:translateY(0); } }
+    .profile-handle { width:40px; height:4px; background:var(--border); border-radius:2px; margin:.75rem auto .5rem; }
+    .profile-header { padding:1rem 1.5rem 1.25rem; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:1rem; }
+    .profile-avatar-lg { width:56px; height:56px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:1.3rem; font-weight:800; flex-shrink:0; }
+    .profile-name { font-size:1.2rem; font-weight:800; }
+    .profile-club { font-size:.85rem; color:var(--text-muted); margin-top:.1rem; }
+    .profile-badges { display:flex; gap:.5rem; margin-top:.5rem; flex-wrap:wrap; }
+    .profile-body { padding:1.25rem 1.5rem; }
+    .profile-stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:.75rem; margin-bottom:1.5rem; }
+    .pstat { background:var(--card); border-radius:var(--radius-sm); padding:.75rem; text-align:center; }
+    .pstat-val { font-size:1.35rem; font-weight:800; }
+    .pstat-label { font-size:.7rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; margin-top:.15rem; }
+    .profile-section-title { font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); margin-bottom:.75rem; }
+    .profile-form { display:flex; gap:.4rem; align-items:center; margin-bottom:1.5rem; }
+    .chart-wrap { margin-bottom:1.5rem; background:var(--card); border-radius:var(--radius); padding:1rem; border:1px solid var(--border); }
+    .h2h-bar { height:8px; background:var(--surface); border-radius:999px; overflow:hidden; display:flex; margin:.5rem 0; }
+    .h2h-bar-fill { height:100%; background:linear-gradient(90deg,var(--success),var(--primary)); transition:width .5s ease; }
+    .h2h-info { display:flex; justify-content:space-between; font-size:.82rem; color:var(--text-muted); }
 
-    /* ── HEADER ── */
-    #app-page { display: none; }
-    header {
-      background: var(--surface); border-bottom: 1px solid var(--border);
-      position: sticky; top: 0; z-index: 100;
-    }
-    .header-inner {
-      max-width: 1100px; margin: 0 auto; padding: 0 1rem;
-      display: flex; align-items: center; gap: 1rem; height: 58px;
-    }
-    .logo {
-      font-size: 1.25rem; font-weight: 800; white-space: nowrap; flex-shrink: 0;
-      background: linear-gradient(135deg, var(--primary) 0%, var(--diamond) 100%);
-      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
-    }
-    nav { display: flex; gap: 0.2rem; flex: 1; overflow-x: auto; scrollbar-width: none; }
-    nav::-webkit-scrollbar { display: none; }
-    .nav-btn {
-      padding: 0.45rem 0.9rem; background: none; border: none;
-      color: var(--text-muted); cursor: pointer; border-radius: var(--radius-sm);
-      font-size: 0.88rem; font-weight: 500; white-space: nowrap; transition: all 0.2s;
-    }
-    .nav-btn:hover { background: var(--card); color: var(--text); }
-    .nav-btn.active { background: var(--card); color: var(--text); }
-    .user-area { display: flex; align-items: center; gap: 0.6rem; flex-shrink: 0; }
-    #header-user-name {
-      font-size: 0.82rem; color: var(--text-muted);
-      display: none; max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    }
-    @media (min-width: 560px) { #header-user-name { display: block; } }
+    /* STATS VIEW */
+    .stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.25rem; }
+    .monthly-list { display:flex; flex-direction:column; gap:.5rem; }
+    .monthly-row { display:flex; align-items:center; gap:.75rem; padding:.6rem .75rem; background:var(--surface); border-radius:var(--radius-sm); }
+    .monthly-rank { font-size:.8rem; font-weight:700; color:var(--text-muted); width:24px; flex-shrink:0; }
+    .monthly-name { flex:1; font-weight:600; font-size:.9rem; }
+    .monthly-delta { font-size:.85rem; font-weight:700; }
+    .h2h-selects { display:grid; grid-template-columns:1fr auto 1fr; gap:.75rem; align-items:center; margin-bottom:1rem; }
+    .h2h-vs { text-align:center; font-weight:700; color:var(--text-muted); }
 
-    /* ── MAIN ── */
-    main { max-width: 1100px; margin: 0 auto; padding: 2rem 1rem; }
-    .view { display: none; }
-    .view.active { display: block; }
-    .view-header { margin-bottom: 1.5rem; }
-    .view-header h2 { font-size: 1.5rem; font-weight: 700; }
-    .view-header p { color: var(--text-muted); margin-top: 0.2rem; font-size: 0.9rem; }
+    /* ADMIN */
+    .admin-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:1.25rem; }
+    .admin-table-wrap { overflow-x:auto; margin-top:1rem; }
+    .admin-table-wrap table { min-width:400px; }
+    .badge { display:inline-block; padding:.15rem .5rem; border-radius:4px; font-size:.72rem; font-weight:700; }
+    .badge-admin { background:rgba(124,124,248,.2); color:var(--primary-lt); }
 
-    /* ── RANKING ── */
-    .ranking-table-wrapper {
-      overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--border);
-    }
-    table { width: 100%; border-collapse: collapse; min-width: 520px; }
-    thead th {
-      background: var(--card); padding: 0.7rem 1rem; text-align: left;
-      font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
-      letter-spacing: 0.05em; color: var(--text-muted);
-    }
-    tbody tr { border-top: 1px solid var(--border); transition: background 0.15s; }
-    tbody tr:hover { background: var(--card-hover); }
-    tbody tr.is-me { background: rgba(124,124,248,0.06); }
-    td { padding: 0.7rem 1rem; font-size: 0.88rem; }
-    .rank-num { font-weight: 700; color: var(--text-muted); }
-    .rank-top { color: var(--gold); }
-    .player-info { display: flex; align-items: center; gap: 0.7rem; }
-    .avatar {
-      width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 0.8rem; font-weight: 700;
-    }
-    .player-name { font-weight: 600; font-size: 0.92rem; }
-    .player-club { font-size: 0.76rem; color: var(--text-muted); }
-    .tier-badge {
-      display: inline-flex; align-items: center; gap: 0.3rem;
-      padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.74rem; font-weight: 700;
-    }
-    .elo-val { font-weight: 700; font-size: 1rem; }
-    .win-rate { color: var(--text-muted); font-size: 0.82rem; }
+    /* EMPTY STATE */
+    .empty-state { text-align:center; padding:3rem 1rem; color:var(--text-muted); }
+    .empty-icon { font-size:2.5rem; margin-bottom:.75rem; }
 
-    /* ── CARD ── */
-    .card {
-      background: var(--card); border-radius: var(--radius);
-      border: 1px solid var(--border); padding: 1.5rem; margin-bottom: 1rem;
-    }
-    .card-title { font-weight: 700; font-size: 0.95rem; margin-bottom: 1.1rem; }
+    /* SPINNER */
+    .spinner { display:inline-block; width:16px; height:16px; border:2px solid rgba(255,255,255,.25); border-top-color:white; border-radius:50%; animation:spin .65s linear infinite; flex-shrink:0; }
+    @keyframes spin { to { transform:rotate(360deg); } }
 
-    /* ── MATCH FORM ── */
-    .match-form { max-width: 580px; }
-    .score-row {
-      display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem;
-    }
-    .score-label { font-size: 0.82rem; color: var(--text-muted); width: 52px; flex-shrink: 0; font-weight: 600; }
-    .score-inputs { display: flex; align-items: center; gap: 0.6rem; flex: 1; }
-    .score-inputs input[type="number"] {
-      width: 64px; text-align: center; font-size: 1.05rem; font-weight: 700;
-      padding: 0.5rem 0.3rem; background: var(--surface); border: 1px solid var(--border);
-      border-radius: var(--radius-sm); color: var(--text); outline: none;
-      -moz-appearance: textfield;
-    }
-    .score-inputs input[type="number"]::-webkit-inner-spin-button,
-    .score-inputs input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
-    .score-inputs input[type="number"]:focus { border-color: var(--primary); }
-    .score-sep { color: var(--text-dim); font-weight: 700; font-size: 1.1rem; }
-    .set-tag {
-      font-size: 0.76rem; font-weight: 600; padding: 0.2rem 0.5rem;
-      border-radius: 4px; min-width: 70px; text-align: center;
-    }
-    .set-tag.win   { color: var(--success); background: rgba(61,214,140,0.12); }
-    .set-tag.loss  { color: var(--error);   background: rgba(255,107,107,0.12); }
-    .set-tag.invalid { color: var(--text-dim); background: transparent; }
-    #set3-row { display: none; }
+    /* TOAST */
+    .toast-wrap { position:fixed; bottom:1.25rem; right:1.25rem; z-index:9999; display:flex; flex-direction:column; gap:.5rem; pointer-events:none; }
+    .toast { background:var(--card); border:1px solid var(--border); border-radius:var(--radius-sm); padding:.7rem 1rem; font-size:.88rem; max-width:300px; box-shadow:0 6px 24px rgba(0,0,0,.5); animation:slideUp .25s ease; pointer-events:auto; }
+    .toast.success { border-left:3px solid var(--success); } .toast.error { border-left:3px solid var(--error); } .toast.info { border-left:3px solid var(--primary); }
+    @keyframes slideUp { from { transform:translateY(8px); opacity:0; } }
+    @keyframes fadeOut { to { opacity:0; transform:translateY(-4px); } }
 
-    /* ── ELO PREVIEW ── */
-    .win-bar-wrap { margin-bottom: 1.1rem; }
-    .win-bar-labels { display: flex; justify-content: space-between; margin-bottom: 0.3rem; font-size: 0.78rem; color: var(--text-muted); }
-    .win-bar { height: 8px; background: var(--surface); border-radius: 999px; overflow: hidden; }
-    .win-bar-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--primary), var(--diamond)); transition: width 0.4s ease; }
-    .win-pct { text-align: center; margin-top: 0.35rem; font-size: 1.15rem; font-weight: 800; color: var(--primary-lt); }
-    .elo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-    .elo-tile { background: var(--surface); border-radius: var(--radius-sm); padding: 1rem; text-align: center; }
-    .elo-tile-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600; margin-bottom: 0.25rem; }
-    .elo-tile-val { font-size: 1.5rem; font-weight: 800; }
-    .elo-tile-val.pos { color: var(--success); }
-    .elo-tile-val.neg { color: var(--error); }
-    .elo-tile-sub { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem; }
+    /* UTILS */
+    .text-muted { color:var(--text-muted); } .text-center { text-align:center; }
+    .me-tag { color:var(--primary-lt); font-size:.72rem; font-weight:700; }
 
-    #match-result-preview { text-align: center; margin-top: 0.75rem; font-size: 0.95rem; min-height: 1.4rem; }
-
-    /* ── HISTORY ── */
-    .history-filters { display: flex; gap: 0.6rem; margin-bottom: 1.5rem; flex-wrap: wrap; align-items: center; }
-    .history-filters select {
-      background: var(--card); border: 1px solid var(--border);
-      color: var(--text); padding: 0.5rem 2rem 0.5rem 0.75rem;
-      border-radius: var(--radius-sm); font-size: 0.88rem; outline: none; cursor: pointer;
-      -webkit-appearance: none; appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236868a0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-      background-repeat: no-repeat; background-position: right 0.6rem center;
-    }
-    .history-filters select option { background: #1c1c2a; }
-    .match-card {
-      background: var(--card); border-radius: var(--radius); border: 1px solid var(--border);
-      padding: 1rem 1.25rem; margin-bottom: 0.6rem;
-      display: grid; grid-template-columns: 1fr auto 1fr; gap: 0.75rem; align-items: center;
-    }
-    .match-player { font-weight: 600; font-size: 0.9rem; }
-    .match-player.winner { color: var(--success); }
-    .match-player.loser  { color: var(--text-muted); }
-    .match-elo { font-size: 0.76rem; font-weight: 600; margin-top: 0.15rem; }
-    .match-elo.pos { color: var(--success); }
-    .match-elo.neg { color: var(--error); }
-    .match-center { text-align: center; }
-    .match-sets { display: flex; gap: 0.35rem; justify-content: center; flex-wrap: wrap; margin-bottom: 0.25rem; }
-    .set-chip { font-size: 0.74rem; padding: 0.12rem 0.4rem; border-radius: 3px; background: var(--surface); font-weight: 600; }
-    .match-date { font-size: 0.72rem; color: var(--text-muted); }
-    .match-right { text-align: right; }
-
-    /* ── ADMIN ── */
-    .admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 1.25rem; }
-    .admin-table-wrap { overflow-x: auto; margin-top: 1rem; }
-    .admin-table-wrap table { min-width: 400px; }
-    .badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.72rem; font-weight: 700; }
-    .badge-admin { background: rgba(124,124,248,0.2); color: var(--primary-lt); }
-
-    /* ── EMPTY STATE ── */
-    .empty-state { text-align: center; padding: 3rem 1rem; color: var(--text-muted); }
-    .empty-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
-
-    /* ── SPINNER ── */
-    .spinner {
-      display: inline-block; width: 16px; height: 16px;
-      border: 2px solid rgba(255,255,255,0.25); border-top-color: white;
-      border-radius: 50%; animation: spin 0.65s linear infinite; flex-shrink: 0;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── TOAST ── */
-    .toast-wrap {
-      position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 9999;
-      display: flex; flex-direction: column; gap: 0.5rem; pointer-events: none;
-    }
-    .toast {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: var(--radius-sm); padding: 0.7rem 1rem; font-size: 0.88rem;
-      max-width: 300px; box-shadow: 0 6px 24px rgba(0,0,0,0.5);
-      animation: slideUp 0.25s ease; pointer-events: auto;
-    }
-    .toast.success { border-left: 3px solid var(--success); }
-    .toast.error   { border-left: 3px solid var(--error); }
-    .toast.info    { border-left: 3px solid var(--primary); }
-    @keyframes slideUp { from { transform: translateY(8px); opacity: 0; } }
-    @keyframes fadeOut { to { opacity: 0; transform: translateY(-4px); } }
-
-    /* ── UTILS ── */
-    .text-muted { color: var(--text-muted); }
-    .text-center { text-align: center; }
-    .mt-05 { margin-top: 0.35rem; }
-    .me-tag { color: var(--primary-lt); font-size: 0.72rem; font-weight: 700; vertical-align: middle; }
-
-    /* ── RESPONSIVE ── */
-    @media (max-width: 600px) {
-      .header-inner { gap: 0.5rem; }
-      .logo { font-size: 1.05rem; }
-      main { padding: 1rem 0.75rem; }
-      .match-card { grid-template-columns: 1fr; gap: 0.4rem; }
-      .match-right { text-align: left; }
-      .elo-grid { grid-template-columns: 1fr 1fr; }
-      td { padding: 0.55rem 0.75rem; }
-      thead th { padding: 0.55rem 0.75rem; }
-      .card { padding: 1rem; }
+    /* RESPONSIVE */
+    @media(max-width:600px) {
+      .header-inner { gap:.5rem; } .logo { font-size:1.05rem; }
+      main { padding:1rem .75rem; padding-bottom:80px; }
+      .match-card { grid-template-columns:1fr; gap:.4rem; } .match-right { text-align:left; }
+      td { padding:.55rem .75rem; } thead th { padding:.55rem .75rem; }
+      .card { padding:1rem; }
+      .profile-stats-grid { grid-template-columns:repeat(2,1fr); }
+      .h2h-selects { grid-template-columns:1fr; }
+      .h2h-vs { display:none; }
     }
   </style>
 </head>
 <body>
 
-<!-- ─── LOADING ─── -->
-<div id="loading">
-  <div class="spinner"></div>
-  <span>Starte PingLeague…</span>
-</div>
+<div id="loading"><div class="spinner"></div><span>Starte PingLeague…</span></div>
 
-<!-- ─── AUTH ─── -->
+<!-- AUTH -->
 <div id="auth-page">
-  <div class="auth-container">
+  <div class="auth-wrap">
     <div class="auth-logo">
       <h1>🏓 PingLeague</h1>
       <p>Das Tischtennis-Ranking für dein Team</p>
     </div>
-
     <div class="auth-tabs">
-      <button class="auth-tab active" id="tab-login"    onclick="switchTab('login')">Anmelden</button>
-      <button class="auth-tab"        id="tab-register" onclick="switchTab('register')">Registrieren</button>
+      <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Anmelden</button>
+      <button class="auth-tab" id="tab-reg" onclick="switchTab('register')">Registrieren</button>
     </div>
-
-    <!-- Login -->
     <div id="form-login" class="auth-form">
       <div id="login-alert"></div>
-      <div class="form-group">
-        <label>E-Mail</label>
-        <input type="email" id="login-email" placeholder="deine@email.de" autocomplete="email">
-      </div>
-      <div class="form-group">
-        <label>Passwort</label>
-        <input type="password" id="login-pw" placeholder="••••••••" autocomplete="current-password">
-      </div>
+      <div class="form-group"><label>E-Mail</label><input type="email" id="login-email" placeholder="deine@email.de" autocomplete="email"></div>
+      <div class="form-group"><label>Passwort</label><input type="password" id="login-pw" placeholder="••••••••" autocomplete="current-password"></div>
       <button class="btn btn-primary btn-full" id="btn-login" onclick="doLogin()">Anmelden</button>
     </div>
-
-    <!-- Register -->
     <div id="form-register" class="auth-form" style="display:none">
       <div id="reg-alert"></div>
-      <div class="form-group">
-        <label>Name</label>
-        <input type="text" id="reg-name" placeholder="Dein vollständiger Name" autocomplete="name">
-      </div>
-      <div class="form-group">
-        <label>Verein <span style="color:var(--text-dim)">(optional)</span></label>
-        <input type="text" id="reg-club" placeholder="TTC Musterstadt">
-      </div>
-      <div class="form-group">
-        <label>E-Mail</label>
-        <input type="email" id="reg-email" placeholder="deine@email.de" autocomplete="email">
-      </div>
-      <div class="form-group">
-        <label>Passwort <span style="color:var(--text-dim)">(min. 6 Zeichen)</span></label>
-        <input type="password" id="reg-pw" placeholder="••••••••" autocomplete="new-password">
-      </div>
+      <div class="form-group"><label>Name</label><input type="text" id="reg-name" placeholder="Dein vollständiger Name"></div>
+      <div class="form-group"><label>Verein <span style="color:var(--text-dim)">(optional)</span></label><input type="text" id="reg-club" placeholder="TTC Musterstadt"></div>
+      <div class="form-group"><label>E-Mail</label><input type="email" id="reg-email" placeholder="deine@email.de" autocomplete="email"></div>
+      <div class="form-group"><label>Passwort <span style="color:var(--text-dim)">(min. 6 Zeichen)</span></label><input type="password" id="reg-pw" placeholder="••••••••" autocomplete="new-password"></div>
       <button class="btn btn-primary btn-full" id="btn-register" onclick="doRegister()">Konto erstellen</button>
     </div>
   </div>
 </div>
 
-<!-- ─── APP ─── -->
+<!-- APP -->
 <div id="app-page">
   <header>
     <div class="header-inner">
       <div class="logo">🏓 PingLeague</div>
-      <nav>
+      <nav class="top-nav">
         <button class="nav-btn active" data-view="ranking" onclick="showView('ranking')">Rangliste</button>
-        <button class="nav-btn"        data-view="match"   onclick="showView('match')">Match eintragen</button>
-        <button class="nav-btn"        data-view="history" onclick="showView('history')">Verlauf</button>
-        <button class="nav-btn"        data-view="admin"   id="admin-nav" style="display:none" onclick="showView('admin')">Admin</button>
+        <button class="nav-btn" data-view="match" onclick="showView('match')">Match</button>
+        <button class="nav-btn" data-view="history" onclick="showView('history')">Verlauf</button>
+        <button class="nav-btn" data-view="stats" onclick="showView('stats')">Stats</button>
+        <button class="nav-btn" data-view="admin" id="admin-nav" style="display:none" onclick="showView('admin')">Admin</button>
       </nav>
       <div class="user-area">
         <span id="header-user-name"></span>
@@ -407,183 +285,116 @@
     </div>
   </header>
 
+  <!-- BOTTOM NAV (mobile) -->
+  <div class="bottom-nav">
+    <div class="bottom-nav-inner">
+      <button class="bnav-btn active" data-view="ranking" onclick="showView('ranking')"><span class="bnav-icon">🏆</span>Liga</button>
+      <button class="bnav-btn" data-view="match" onclick="showView('match')"><span class="bnav-icon">➕</span>Match</button>
+      <button class="bnav-btn" data-view="history" onclick="showView('history')"><span class="bnav-icon">📋</span>Verlauf</button>
+      <button class="bnav-btn" data-view="stats" onclick="showView('stats')"><span class="bnav-icon">📊</span>Stats</button>
+      <button class="bnav-btn" data-view="admin" id="bottom-admin-btn" style="display:none" onclick="showView('admin')"><span class="bnav-icon">⚙️</span>Admin</button>
+    </div>
+  </div>
+
   <main>
-    <!-- ─ RANKING ─ -->
+    <!-- RANKING -->
     <div id="view-ranking" class="view active">
-      <div class="view-header">
-        <h2>Rangliste</h2>
-        <p>Aktuelle Elo-Bewertungen — Stand: Echtzeit</p>
-      </div>
+      <div class="view-header"><h2>Rangliste</h2><p>Elo-Bewertungen · Level 0.5–7.0 · Echtzeit</p></div>
+      <div id="month-banner-wrap"></div>
       <div class="ranking-table-wrapper">
         <table>
-          <thead>
-            <tr>
-              <th style="width:44px">#</th>
-              <th>Spieler</th>
-              <th>Tier</th>
-              <th>Elo</th>
-              <th>S / N</th>
-              <th>Matches</th>
-              <th>Quote</th>
-            </tr>
-          </thead>
-          <tbody id="ranking-tbody">
-            <tr><td colspan="7" class="text-center text-muted" style="padding:2rem">Lade…</td></tr>
-          </tbody>
+          <thead><tr><th style="width:44px">#</th><th>Spieler</th><th>Level</th><th>Elo</th><th>Form</th><th>S / N</th><th>Matches</th></tr></thead>
+          <tbody id="ranking-tbody"><tr><td colspan="7" class="text-center text-muted" style="padding:2rem">Lade…</td></tr></tbody>
         </table>
       </div>
     </div>
 
-    <!-- ─ MATCH ENTRY ─ -->
+    <!-- MATCH -->
     <div id="view-match" class="view">
-      <div class="view-header">
-        <h2>Match eintragen</h2>
-        <p>Ergebnis eines gespielten Matches aufzeichnen</p>
-      </div>
-
+      <div class="view-header"><h2>Match eintragen</h2><p>Best of 3 · Sätze bis 11 · bei 10:10 bis +2</p></div>
       <div class="match-form">
-        <!-- Players -->
         <div class="card">
           <div class="card-title">Spieler</div>
-          <div class="form-group">
-            <label>Spieler 1</label>
-            <select id="m-p1" onchange="onPlayerChange()"></select>
-          </div>
-          <div class="form-group">
-            <label>Spieler 2 (Gegner)</label>
-            <select id="m-p2" onchange="onPlayerChange()">
-              <option value="">— Gegner auswählen —</option>
-            </select>
-          </div>
+          <div class="form-group"><label>Spieler 1</label><select id="m-p1" onchange="onPlayerChange()"></select></div>
+          <div class="form-group"><label>Spieler 2 (Gegner)</label><select id="m-p2" onchange="onPlayerChange()"><option value="">— Gegner auswählen —</option></select></div>
         </div>
-
-        <!-- Elo Preview -->
         <div class="card" id="elo-preview" style="display:none">
           <div class="card-title">Elo-Vorschau</div>
           <div class="win-bar-wrap">
-            <div class="win-bar-labels">
-              <span id="p1-label-bar">Spieler 1</span>
-              <span id="p2-label-bar">Spieler 2</span>
-            </div>
-            <div class="win-bar">
-              <div class="win-bar-fill" id="win-bar-fill" style="width:50%"></div>
-            </div>
+            <div class="win-bar-labels"><span id="p1-label-bar">S1</span><span id="p2-label-bar">S2</span></div>
+            <div class="win-bar"><div class="win-bar-fill" id="win-bar-fill" style="width:50%"></div></div>
             <div class="win-pct" id="win-pct-txt">50% Siegchance</div>
           </div>
           <div class="elo-grid">
-            <div class="elo-tile">
-              <div class="elo-tile-label">Sieg Spieler 1</div>
-              <div class="elo-tile-val pos" id="ep-win-val">+0</div>
-              <div class="elo-tile-sub"    id="ep-win-tot">→ 1200</div>
-            </div>
-            <div class="elo-tile">
-              <div class="elo-tile-label">Niederlage Spieler 1</div>
-              <div class="elo-tile-val neg" id="ep-loss-val">−0</div>
-              <div class="elo-tile-sub"     id="ep-loss-tot">→ 1200</div>
-            </div>
+            <div class="elo-tile"><div class="elo-tile-label">Sieg S1</div><div class="elo-tile-val pos" id="ep-win-val">+0</div><div class="elo-tile-sub" id="ep-win-tot">→ 1200</div></div>
+            <div class="elo-tile"><div class="elo-tile-label">Niederlage S1</div><div class="elo-tile-val neg" id="ep-loss-val">−0</div><div class="elo-tile-sub" id="ep-loss-tot">→ 1200</div></div>
           </div>
         </div>
-
-        <!-- Sets -->
         <div class="card">
-          <div class="card-title">Sätze (Best of 3 · bis 11, bei 10:10 bis +2)</div>
+          <div class="card-title">Sätze</div>
           <div id="match-alert"></div>
-
-          <div class="score-row">
-            <div class="score-label">Satz 1</div>
-            <div class="score-inputs">
-              <input type="number" id="s1a" min="0" max="40" placeholder="0" oninput="onScoreInput()">
-              <span class="score-sep">:</span>
-              <input type="number" id="s1b" min="0" max="40" placeholder="0" oninput="onScoreInput()">
-              <span class="set-tag" id="s1-tag"></span>
-            </div>
-          </div>
-          <div class="score-row">
-            <div class="score-label">Satz 2</div>
-            <div class="score-inputs">
-              <input type="number" id="s2a" min="0" max="40" placeholder="0" oninput="onScoreInput()">
-              <span class="score-sep">:</span>
-              <input type="number" id="s2b" min="0" max="40" placeholder="0" oninput="onScoreInput()">
-              <span class="set-tag" id="s2-tag"></span>
-            </div>
-          </div>
-          <div class="score-row" id="set3-row">
-            <div class="score-label">Satz 3</div>
-            <div class="score-inputs">
-              <input type="number" id="s3a" min="0" max="40" placeholder="0" oninput="onScoreInput()">
-              <span class="score-sep">:</span>
-              <input type="number" id="s3b" min="0" max="40" placeholder="0" oninput="onScoreInput()">
-              <span class="set-tag" id="s3-tag"></span>
-            </div>
-          </div>
-
+          <div class="score-row"><div class="score-label">Satz 1</div><div class="score-inputs"><input type="number" id="s1a" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="score-sep">:</span><input type="number" id="s1b" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="set-tag" id="s1-tag"></span></div></div>
+          <div class="score-row"><div class="score-label">Satz 2</div><div class="score-inputs"><input type="number" id="s2a" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="score-sep">:</span><input type="number" id="s2b" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="set-tag" id="s2-tag"></span></div></div>
+          <div class="score-row" id="set3-row"><div class="score-label">Satz 3</div><div class="score-inputs"><input type="number" id="s3a" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="score-sep">:</span><input type="number" id="s3b" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="set-tag" id="s3-tag"></span></div></div>
           <div id="match-result-preview"></div>
         </div>
-
-        <button class="btn btn-success btn-full" id="btn-submit-match" onclick="submitMatch()">
-          Match eintragen
-        </button>
+        <button class="btn btn-success btn-full" id="btn-submit-match" onclick="submitMatch()">Match eintragen</button>
       </div>
     </div>
 
-    <!-- ─ HISTORY ─ -->
+    <!-- HISTORY -->
     <div id="view-history" class="view">
-      <div class="view-header">
-        <h2>Spielverlauf</h2>
-        <p>Zuletzt eingetragene Matches</p>
-      </div>
+      <div class="view-header"><h2>Spielverlauf</h2><p>Zuletzt eingetragene Matches</p></div>
       <div class="history-filters">
-        <select id="history-filter" onchange="loadHistory()">
-          <option value="">Alle Spieler</option>
-        </select>
+        <select id="history-filter" onchange="loadHistory()"><option value="">Alle Spieler</option></select>
         <button class="btn btn-secondary btn-sm" onclick="loadHistory()">↻ Aktualisieren</button>
       </div>
-      <div id="history-list">
-        <div class="empty-state"><div class="empty-icon">⏳</div><p>Lade…</p></div>
+      <div id="history-list"><div class="empty-state"><div class="empty-icon">⏳</div><p>Lade…</p></div></div>
+    </div>
+
+    <!-- STATS -->
+    <div id="view-stats" class="view">
+      <div class="view-header"><h2>Statistiken</h2><p>Monatssieger · H2H · Formkurven</p></div>
+      <div class="stats-grid">
+        <!-- Monthly ranking -->
+        <div class="card">
+          <div class="card-title">📅 Monatsranking — <span id="month-name"></span></div>
+          <div id="monthly-list"><div class="text-muted" style="font-size:.88rem">Lade…</div></div>
+        </div>
+        <!-- H2H -->
+        <div class="card">
+          <div class="card-title">⚔️ Head-to-Head</div>
+          <div class="h2h-selects">
+            <select id="h2h-p1" onchange="loadH2HStats()"><option value="">Spieler 1</option></select>
+            <div class="h2h-vs">vs</div>
+            <select id="h2h-p2" onchange="loadH2HStats()"><option value="">Spieler 2</option></select>
+          </div>
+          <div id="h2h-result"></div>
+        </div>
+        <!-- Best performers -->
+        <div class="card" style="grid-column:1/-1">
+          <div class="card-title">🔥 Aktuelle Formkurve — letzte 5 Matches</div>
+          <div id="form-list"></div>
+        </div>
       </div>
     </div>
 
-    <!-- ─ ADMIN ─ -->
+    <!-- ADMIN -->
     <div id="view-admin" class="view">
-      <div class="view-header">
-        <h2>Admin Panel</h2>
-        <p>Systemeinstellungen und Spielerverwaltung</p>
-      </div>
+      <div class="view-header"><h2>Admin Panel</h2><p>Systemeinstellungen und Spielerverwaltung</p></div>
       <div class="admin-grid">
-        <!-- Settings -->
         <div class="card">
-          <div class="card-title">K-Faktor Einstellungen</div>
+          <div class="card-title">K-Faktor</div>
           <div id="settings-alert"></div>
-          <div class="form-group">
-            <label>K hoch — unter 30 Matches</label>
-            <input type="number" id="k-high" min="1" max="200" value="32">
-          </div>
-          <div class="form-group">
-            <label>K niedrig — ab 30 Matches</label>
-            <input type="number" id="k-low" min="1" max="200" value="16">
-          </div>
+          <div class="form-group"><label>K hoch (unter 30 Matches)</label><input type="number" id="k-high" min="1" max="200" value="32"></div>
+          <div class="form-group"><label>K niedrig (ab 30 Matches)</label><input type="number" id="k-low" min="1" max="200" value="16"></div>
           <button class="btn btn-primary" onclick="saveSettings()">Speichern</button>
         </div>
-
-        <!-- Players -->
-        <div class="card" style="grid-column: 1 / -1;">
+        <div class="card" style="grid-column:1/-1">
           <div class="card-title">Spielerverwaltung</div>
           <div class="admin-table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Verein</th>
-                  <th>Elo</th>
-                  <th>Matches</th>
-                  <th>Status</th>
-                  <th>Aktionen</th>
-                </tr>
-              </thead>
-              <tbody id="admin-tbody">
-                <tr><td colspan="6" class="text-center text-muted" style="padding:1.5rem">Lade…</td></tr>
-              </tbody>
-            </table>
+            <table><thead><tr><th>Name</th><th>Verein</th><th>Elo</th><th>Level</th><th>Matches</th><th>Status</th><th>Aktionen</th></tr></thead>
+            <tbody id="admin-tbody"><tr><td colspan="7" class="text-center text-muted" style="padding:1.5rem">Lade…</td></tr></tbody></table>
           </div>
         </div>
       </div>
@@ -591,59 +402,54 @@
   </main>
 </div>
 
-<!-- Toast container -->
+<!-- PROFILE MODAL -->
+<div class="profile-overlay" id="profile-overlay" onclick="closeProfile(event)">
+  <div class="profile-sheet" id="profile-sheet">
+    <div class="profile-handle"></div>
+    <div class="profile-header" id="profile-header"></div>
+    <div class="profile-body" id="profile-body"></div>
+  </div>
+</div>
+
 <div class="toast-wrap" id="toasts"></div>
 
 <script>
 'use strict';
+const SUPABASE_URL = 'https://xsxsyfaxhwrbllvvfxxm.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzeHN5ZmF4aHdyYmxsdnZmeHhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MTM1NzIsImV4cCI6MjA5NTE4OTU3Mn0.y35dDJTrkCNMU7P0V4H8iSMprITdRst9kl7B5_BMvc8';
+const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storage:window.localStorage } });
 
-const SUPABASE_URL     = 'https://xsxsyfaxhwrbllvvfxxm.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzeHN5ZmF4aHdyYmxsdnZmeHhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MTM1NzIsImV4cCI6MjA5NTE4OTU3Mn0.y35dDJTrkCNMU7P0V4H8iSMprITdRst9kl7B5_BMvc8';
+let S = { user:null, player:null, isAdmin:false, players:[], settings:{ k_high:32, k_low:16 } };
 
-const db = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-    storage: window.localStorage
-  }
-});
+// ── ELO & LEVEL ──────────────────────────────────────────────────────────
+function expected(ra, rb) { return 1 / (1 + Math.pow(10, (rb - ra) / 400)); }
 
-// ── STATE ──────────────────────────────────────────────────────────────────
-let S = {
-  user: null,
-  player: null,
-  isAdmin: false,
-  players: [],
-  settings: { k_high: 32, k_low: 16 }
-};
-
-// ── ELO ───────────────────────────────────────────────────────────────────
-function expected(ra, rb) {
-  return 1 / (1 + Math.pow(10, (rb - ra) / 400));
-}
-
-function calcElo(wElo, lElo, wMatches, lMatches) {
-  const kW = wMatches < 30 ? S.settings.k_high : S.settings.k_low;
-  const kL = lMatches < 30 ? S.settings.k_high : S.settings.k_low;
+function calcElo(wElo, lElo, wM, lM) {
+  const kW = wM < 30 ? S.settings.k_high : S.settings.k_low;
+  const kL = lM < 30 ? S.settings.k_high : S.settings.k_low;
   const eW = expected(wElo, lElo);
   const gain = Math.round(kW * (1 - eW));
   const loss = Math.round(kL * eW);
-  return {
-    wNew: wElo + gain,
-    lNew: lElo - loss,
-    gain,
-    loss
-  };
+  return { wNew: wElo + gain, lNew: lElo - loss, gain, loss };
 }
 
-// ── TIERS ─────────────────────────────────────────────────────────────────
-function tier(elo) {
-  if (elo >= 1700) return { name: 'Diamant', color: 'var(--diamond)',  icon: '💎' };
-  if (elo >= 1500) return { name: 'Platin',  color: 'var(--platinum)', icon: '🔮' };
-  if (elo >= 1300) return { name: 'Gold',    color: 'var(--gold)',     icon: '⭐' };
-  if (elo >= 1100) return { name: 'Silber',  color: 'var(--silver)',   icon: '🥈' };
-  return               { name: 'Bronze',  color: 'var(--bronze)',   icon: '🥉' };
+function eloToLevel(elo) {
+  const raw = 0.5 + (elo - 1000) / 1000 * 6.5;
+  return Math.max(0.5, Math.min(7.0, Math.round(raw * 2) / 2));
+}
+function levelColor(lvl) {
+  if (lvl >= 6.0) return 'var(--diamond)';
+  if (lvl >= 4.5) return 'var(--platinum)';
+  if (lvl >= 3.5) return 'var(--gold)';
+  if (lvl >= 2.0) return 'var(--silver)';
+  return 'var(--bronze)';
+}
+function levelLabel(lvl) {
+  if (lvl >= 6.0) return 'Elite';
+  if (lvl >= 4.5) return 'Fortgeschritten';
+  if (lvl >= 3.5) return 'Stark';
+  if (lvl >= 2.0) return 'Mittel';
+  return 'Einsteiger';
 }
 
 // ── SET VALIDATION ────────────────────────────────────────────────────────
@@ -652,628 +458,553 @@ function validSet(a, b) {
   if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
   const hi = Math.max(a, b), lo = Math.min(a, b);
   if (hi < 11 || hi - lo < 2) return false;
-  if (lo < 10 && hi !== 11) return false;  // e.g. 12:8 is impossible
+  if (lo < 10 && hi !== 11) return false;
   return true;
 }
-
-function setWinner(a, b) {
-  if (!validSet(a, b)) return 0;
-  return Number(a) > Number(b) ? 1 : 2;
-}
+function setWinner(a, b) { if (!validSet(a, b)) return 0; return Number(a) > Number(b) ? 1 : 2; }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────
-function byId(id)   { return S.players.find(p => p.id === id); }
-function $el(id)    { return document.getElementById(id); }
-function $val(id)   { return $el(id).value.trim(); }
-function $inum(id)  { return parseInt($el(id).value); }
-
+function byId(id) { return S.players.find(p => p.id === id); }
+function $el(id) { return document.getElementById(id); }
+function $val(id) { return $el(id).value.trim(); }
+function $inum(id) { return parseInt($el(id).value); }
 function avatarCol(name) {
-  const palette = ['#6366f1','#8b5cf6','#06b6d4','#10b981','#f59e0b','#ef4444','#ec4899','#3b82f6'];
-  let h = 0;
-  for (const c of name) h = (h << 5) - h + c.charCodeAt(0);
-  return palette[Math.abs(h) % palette.length];
+  const p = ['#6366f1','#8b5cf6','#06b6d4','#10b981','#f59e0b','#ef4444','#ec4899','#3b82f6'];
+  let h = 0; for (const c of name) h = (h << 5) - h + c.charCodeAt(0);
+  return p[Math.abs(h) % p.length];
 }
-function initials(name) {
-  return name.split(/\s+/).map(w => w[0] || '').join('').toUpperCase().slice(0, 2);
-}
-
+function initials(name) { return name.split(/\s+/).map(w => w[0]||'').join('').toUpperCase().slice(0,2); }
 function fmtDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
-  return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: '2-digit' })
-    + ' ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+  return d.toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'2-digit'}) + ' ' +
+         d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
 }
+function fmtMonth(d) { return d.toLocaleDateString('de-DE',{month:'long',year:'numeric'}); }
+function esc(s) { return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 
 // ── TOAST ─────────────────────────────────────────────────────────────────
-function toast(msg, type = 'info', ms = 3500) {
+function toast(msg, type='info') {
   const el = document.createElement('div');
-  el.className = `toast ${type}`;
-  el.textContent = msg;
+  el.className = `toast ${type}`; el.textContent = msg;
   $el('toasts').appendChild(el);
-  setTimeout(() => {
-    el.style.animation = 'fadeOut 0.3s ease forwards';
-    setTimeout(() => el.remove(), 300);
-  }, ms);
+  setTimeout(() => { el.style.animation='fadeOut .3s ease forwards'; setTimeout(()=>el.remove(),300); }, 3500);
 }
 
 // ── AUTH ──────────────────────────────────────────────────────────────────
 function switchTab(tab) {
-  $el('tab-login').classList.toggle('active', tab === 'login');
-  $el('tab-register').classList.toggle('active', tab === 'register');
-  $el('form-login').style.display    = tab === 'login'    ? 'block' : 'none';
-  $el('form-register').style.display = tab === 'register' ? 'block' : 'none';
+  $el('tab-login').classList.toggle('active', tab==='login');
+  $el('tab-reg').classList.toggle('active', tab==='register');
+  $el('form-login').style.display = tab==='login' ? 'block' : 'none';
+  $el('form-register').style.display = tab==='register' ? 'block' : 'none';
 }
 
 async function doLogin() {
-  const email = $val('login-email');
-  const pw    = $val('login-pw');
-  const alert = $el('login-alert');
-  alert.innerHTML = '';
-
-  if (!email || !pw) {
-    alert.innerHTML = '<div class="alert alert-error">Bitte E-Mail und Passwort eingeben.</div>';
-    return;
-  }
-
-  const btn = $el('btn-login');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Anmelden…';
-
-  const { error } = await db.auth.signInWithPassword({ email, password: pw });
-
-  btn.disabled = false;
-  btn.innerHTML = 'Anmelden';
-
-  if (error) {
-    const msg = error.message.includes('Invalid login') ? 'Falsche E-Mail oder Passwort.' : error.message;
-    alert.innerHTML = `<div class="alert alert-error">${msg}</div>`;
-  }
-  // onAuthStateChange handles the rest
+  const email=$val('login-email'), pw=$val('login-pw'), al=$el('login-alert');
+  al.innerHTML='';
+  if (!email||!pw) { al.innerHTML='<div class="alert alert-error">Bitte alle Felder ausfüllen.</div>'; return; }
+  const btn=$el('btn-login'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Anmelden…';
+  const {error} = await db.auth.signInWithPassword({email,password:pw});
+  btn.disabled=false; btn.innerHTML='Anmelden';
+  if (error) al.innerHTML=`<div class="alert alert-error">${error.message.includes('Invalid')?'Falsche E-Mail oder Passwort.':error.message}</div>`;
 }
 
 async function doRegister() {
-  const name  = $val('reg-name');
-  const club  = $val('reg-club');
-  const email = $val('reg-email');
-  const pw    = $val('reg-pw');
-  const alert = $el('reg-alert');
-  alert.innerHTML = '';
-
-  if (!name || !email || !pw) {
-    alert.innerHTML = '<div class="alert alert-error">Bitte Name, E-Mail und Passwort ausfüllen.</div>';
-    return;
-  }
-  if (pw.length < 6) {
-    alert.innerHTML = '<div class="alert alert-error">Passwort muss mindestens 6 Zeichen haben.</div>';
-    return;
-  }
-
-  const btn = $el('btn-register');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Erstellen…';
-
-  const { data, error } = await db.auth.signUp({ email, password: pw });
-
-  if (error) {
-    btn.disabled = false;
-    btn.innerHTML = 'Konto erstellen';
-    alert.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
-    return;
-  }
-
+  const name=$val('reg-name'), club=$val('reg-club'), email=$val('reg-email'), pw=$val('reg-pw'), al=$el('reg-alert');
+  al.innerHTML='';
+  if (!name||!email||!pw) { al.innerHTML='<div class="alert alert-error">Bitte Name, E-Mail und Passwort ausfüllen.</div>'; return; }
+  if (pw.length<6) { al.innerHTML='<div class="alert alert-error">Passwort muss min. 6 Zeichen haben.</div>'; return; }
+  const btn=$el('btn-register'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Erstellen…';
+  const {data,error} = await db.auth.signUp({email,password:pw});
+  if (error) { btn.disabled=false; btn.innerHTML='Konto erstellen'; al.innerHTML=`<div class="alert alert-error">${error.message}</div>`; return; }
   if (data.user) {
-    const { error: pe } = await db.from('players').insert({
-      user_id: data.user.id,
-      name,
-      club: club || null,
-      elo: 1200, matches: 0, wins: 0, losses: 0, is_admin: false
-    });
-    if (pe) console.error('Player insert:', pe);
+    await db.from('players').insert({user_id:data.user.id,name,club:club||null,elo:1200,matches:0,wins:0,losses:0,is_admin:false});
   }
-
-  btn.disabled = false;
-  btn.innerHTML = 'Konto erstellen';
-
-  if (data.session) {
-    // already logged in (email confirm disabled)
-    alert.innerHTML = '<div class="alert alert-success">Willkommen! Du bist jetzt angemeldet.</div>';
-  } else {
-    alert.innerHTML = '<div class="alert alert-success">Konto erstellt! Bitte bestätige deine E-Mail und melde dich dann an.</div>';
-  }
+  btn.disabled=false; btn.innerHTML='Konto erstellen';
+  al.innerHTML = data.session
+    ? '<div class="alert alert-success">Willkommen! Du bist angemeldet.</div>'
+    : '<div class="alert alert-success">Konto erstellt! Bitte E-Mail bestätigen.</div>';
 }
 
-async function doLogout() {
-  await db.auth.signOut();
-}
+async function doLogout() { await db.auth.signOut(); }
 
-// ── SETUP USER (called after login) ───────────────────────────────────────
+// ── SETUP ─────────────────────────────────────────────────────────────────
 async function setupUser(user) {
   S.user = user;
-  $el('loading').style.display = 'flex';
-
-  const [{ data: playerData }, { data: settingsData }] = await Promise.all([
-    db.from('players').select('*').eq('user_id', user.id).maybeSingle(),
+  $el('loading').style.display='flex';
+  const [{data:pd},{data:sd}] = await Promise.all([
+    db.from('players').select('*').eq('user_id',user.id).maybeSingle(),
     db.from('settings').select('*').limit(1).maybeSingle()
   ]);
-
-  S.player  = playerData;
-  S.isAdmin = playerData?.is_admin || false;
-
-  if (settingsData) {
-    S.settings = { k_high: settingsData.k_high || 32, k_low: settingsData.k_low || 16 };
-    $el('k-high').value = S.settings.k_high;
-    $el('k-low').value  = S.settings.k_low;
-  }
-
-  $el('header-user-name').textContent = playerData?.name || user.email;
-  $el('admin-nav').style.display = S.isAdmin ? '' : 'none';
-
+  S.player=pd; S.isAdmin=pd?.is_admin||false;
+  if (sd) { S.settings={k_high:sd.k_high||32,k_low:sd.k_low||16}; $el('k-high').value=S.settings.k_high; $el('k-low').value=S.settings.k_low; }
+  $el('header-user-name').textContent=pd?.name||user.email;
+  $el('admin-nav').style.display = S.isAdmin?'':'none';
+  $el('bottom-admin-btn').style.display = S.isAdmin?'':'none';
   await loadPlayers();
-  renderRanking();
-  buildMatchSelects();
-  buildHistoryFilter();
+  renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
   showPage('app');
 }
 
 // ── DATA ──────────────────────────────────────────────────────────────────
 async function loadPlayers() {
-  const { data, error } = await db.from('players').select('*').order('elo', { ascending: false });
-  if (error) { console.error(error); return; }
-  S.players = data || [];
+  const {data,error} = await db.from('players').select('*').order('elo',{ascending:false});
+  if (!error) S.players=data||[];
 }
 
 // ── RANKING ───────────────────────────────────────────────────────────────
-function renderRanking() {
-  const tbody = $el('ranking-tbody');
-  if (!S.players.length) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted" style="padding:2rem">Noch keine Spieler.</td></tr>';
-    return;
-  }
-  tbody.innerHTML = S.players.map((p, i) => {
-    const rank = i + 1;
-    const t    = tier(p.elo);
-    const isMe = S.player && p.id === S.player.id;
-    const wr   = p.matches > 0 ? Math.round(p.wins / p.matches * 100) : 0;
-    const col  = avatarCol(p.name);
-    return `
-      <tr class="${isMe ? 'is-me' : ''}">
-        <td class="rank-num ${rank <= 3 ? 'rank-top' : ''}">${
-          rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank
-        }</td>
-        <td>
-          <div class="player-info">
-            <div class="avatar" style="background:${col}22;color:${col}">${initials(p.name)}</div>
-            <div>
-              <div class="player-name">${esc(p.name)}${isMe ? ' <span class="me-tag">(du)</span>' : ''}</div>
-              ${p.club ? `<div class="player-club">${esc(p.club)}</div>` : ''}
-            </div>
-          </div>
-        </td>
-        <td>
-          <span class="tier-badge" style="color:${t.color};background:${t.color}18">
-            ${t.icon} ${t.name}
-          </span>
-        </td>
-        <td><span class="elo-val" style="color:${t.color}">${p.elo}</span></td>
-        <td>${p.wins} / ${p.losses}</td>
-        <td>${p.matches}</td>
-        <td class="win-rate">${wr}%</td>
-      </tr>`;
+async function renderRanking() {
+  // Monthly winner banner
+  await renderMonthBanner();
+  const tbody=$el('ranking-tbody');
+  if (!S.players.length) { tbody.innerHTML='<tr><td colspan="7" class="text-center text-muted" style="padding:2rem">Noch keine Spieler.</td></tr>'; return; }
+
+  // Load recent matches for form dots
+  const {data:recentMatches} = await db.from('matches').select('winner_id,loser_id,created_at').order('created_at',{ascending:false}).limit(200);
+
+  tbody.innerHTML = S.players.map((p,i) => {
+    const rank=i+1, lvl=eloToLevel(p.elo), col=levelColor(lvl), ac=avatarCol(p.name);
+    const isMe = S.player&&p.id===S.player.id;
+    const form = buildFormDots(p.id, recentMatches||[]);
+    return `<tr class="${isMe?'is-me':''}" onclick="openProfile('${p.id}')">
+      <td class="rank-num ${rank<=3?'rank-top':''}">${rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':rank}</td>
+      <td><div class="player-info">
+        <div class="avatar" style="background:${ac}22;color:${ac}">${initials(p.name)}</div>
+        <div><div class="player-name">${esc(p.name)}${isMe?' <span class="me-tag">(du)</span>':''}</div>${p.club?`<div class="player-club">${esc(p.club)}</div>`:''}</div>
+      </div></td>
+      <td><span class="level-badge" style="color:${col};background:${col}18">${lvl.toFixed(1)} <span style="font-size:.68rem;opacity:.7">${levelLabel(lvl)}</span></span></td>
+      <td><span class="elo-val" style="color:${col}">${p.elo}</span></td>
+      <td><div class="form-dots">${form}</div></td>
+      <td>${p.wins} / ${p.losses}</td>
+      <td>${p.matches}</td>
+    </tr>`;
   }).join('');
+}
+
+function buildFormDots(playerId, matches) {
+  const pm = matches.filter(m=>m.winner_id===playerId||m.loser_id===playerId).slice(0,5).reverse();
+  return pm.map(m=>`<span class="fdot ${m.winner_id===playerId?'w':'l'}" title="${m.winner_id===playerId?'Sieg':'Niederlage'}"></span>`).join('');
+}
+
+async function renderMonthBanner() {
+  const now=new Date(), startOfMonth=new Date(now.getFullYear(),now.getMonth(),1);
+  const {data} = await db.from('matches').select('winner_id,loser_id,elo_delta,elo_loser_before,elo_loser_after').gte('created_at',startOfMonth.toISOString());
+  const wrap=$el('month-banner-wrap');
+  if (!data?.length) { wrap.innerHTML=''; return; }
+  const gains={};
+  for (const m of data) {
+    const loss=(m.elo_loser_before||0)-(m.elo_loser_after||0);
+    gains[m.winner_id]=(gains[m.winner_id]||0)+(m.elo_delta||0);
+    gains[m.loser_id]=(gains[m.loser_id]||0)-loss;
+  }
+  const top=Object.entries(gains).sort((a,b)=>b[1]-a[1]).filter(([,d])=>d>0)[0];
+  if (!top) { wrap.innerHTML=''; return; }
+  const p=byId(top[0]);
+  if (!p) { wrap.innerHTML=''; return; }
+  const lvl=eloToLevel(p.elo);
+  wrap.innerHTML=`<div class="month-banner">
+    <div class="month-banner-icon">🏆</div>
+    <div>
+      <div class="month-banner-title">Spieler des Monats — ${fmtMonth(now)}</div>
+      <div class="month-banner-name">${esc(p.name)} <span class="level-badge" style="color:${levelColor(lvl)};background:${levelColor(lvl)}18;font-size:.72rem">${lvl.toFixed(1)}</span></div>
+      <div class="month-banner-delta">+${Math.round(top[1])} Elo diesen Monat</div>
+    </div>
+  </div>`;
+}
+
+// ── PROFILE ───────────────────────────────────────────────────────────────
+async function openProfile(playerId) {
+  const p=byId(playerId); if (!p) return;
+  const overlay=$el('profile-overlay');
+  const header=$el('profile-header');
+  const body=$el('profile-body');
+  const ac=avatarCol(p.name), lvl=eloToLevel(p.elo), col=levelColor(lvl);
+  const wr=p.matches>0?Math.round(p.wins/p.matches*100):0;
+
+  header.innerHTML=`
+    <div class="profile-avatar-lg" style="background:${ac}22;color:${ac}">${initials(p.name)}</div>
+    <div>
+      <div class="profile-name">${esc(p.name)}</div>
+      ${p.club?`<div class="profile-club">${esc(p.club)}</div>`:''}
+      <div class="profile-badges">
+        <span class="level-badge" style="color:${col};background:${col}22">${lvl.toFixed(1)} ${levelLabel(lvl)}</span>
+        <span style="font-size:.78rem;color:var(--text-muted)">Elo ${p.elo}</span>
+      </div>
+    </div>
+    <button onclick="closeProfile()" style="margin-left:auto;background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;line-height:1">✕</button>`;
+
+  body.innerHTML=`
+    <div class="profile-stats-grid">
+      <div class="pstat"><div class="pstat-val">${p.matches}</div><div class="pstat-label">Matches</div></div>
+      <div class="pstat"><div class="pstat-val" style="color:var(--success)">${p.wins}</div><div class="pstat-label">Siege</div></div>
+      <div class="pstat"><div class="pstat-val" style="color:var(--error)">${p.losses}</div><div class="pstat-label">Niederl.</div></div>
+      <div class="pstat"><div class="pstat-val">${wr}%</div><div class="pstat-label">Quote</div></div>
+    </div>
+    <div class="profile-section-title">Elo-Verlauf</div>
+    <div class="chart-wrap" id="profile-chart"><div class="text-muted text-center" style="font-size:.88rem">Lade Chart…</div></div>
+    <div class="profile-section-title">Letzte Matches</div>
+    <div id="profile-matches"><div class="text-muted" style="font-size:.88rem">Lade…</div></div>
+    ${S.player&&playerId!==S.player.id?`
+    <div class="profile-section-title" style="margin-top:1.25rem">Head-to-Head gegen dich</div>
+    <div id="profile-h2h"><div class="text-muted" style="font-size:.88rem">Lade…</div></div>`:''}`;
+
+  overlay.classList.add('open');
+  document.body.style.overflow='hidden';
+
+  // Load async data
+  const [histData, matchData] = await Promise.all([
+    loadPlayerEloHistory(playerId),
+    db.from('matches').select('*').or(`winner_id.eq.${playerId},loser_id.eq.${playerId}`).order('created_at',{ascending:false}).limit(10)
+  ]);
+
+  // Render chart
+  $el('profile-chart').innerHTML = renderEloChart(histData);
+
+  // Render recent matches
+  const matches=matchData.data||[];
+  if (!matches.length) {
+    $el('profile-matches').innerHTML='<div class="text-muted" style="font-size:.85rem">Noch keine Matches.</div>';
+  } else {
+    $el('profile-matches').innerHTML=matches.map(m=>{
+      const isW=m.winner_id===playerId;
+      const opp=byId(isW?m.loser_id:m.winner_id);
+      const sets=(m.sets||[]).map(s=>`<span class="set-chip">${s.p1??'?'}:${s.p2??'?'}</span>`).join('');
+      const delta=isW?`+${m.elo_delta}`:'-'+Math.abs((m.elo_loser_before||0)-(m.elo_loser_after||0));
+      return `<div style="display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:.85rem;font-weight:700;color:${isW?'var(--success)':'var(--error)'}">${isW?'S':'N'}</span>
+        <span style="flex:1;font-size:.88rem">${opp?esc(opp.name):'?'}</span>
+        <div class="match-sets">${sets}</div>
+        <span style="font-size:.78rem;font-weight:700;color:${isW?'var(--success)':'var(--error)'}">${delta}</span>
+      </div>`;
+    }).join('');
+  }
+
+  // H2H vs current user
+  if (S.player&&playerId!==S.player.id) {
+    const h2hEl=$el('profile-h2h');
+    const {data:h2hData} = await db.from('matches').select('winner_id').or(`and(winner_id.eq.${playerId},loser_id.eq.${S.player.id}),and(winner_id.eq.${S.player.id},loser_id.eq.${playerId})`);
+    const total=(h2hData||[]).length;
+    if (!total) {
+      h2hEl.innerHTML='<div class="text-muted" style="font-size:.85rem">Noch keine Matches gegeneinander.</div>';
+    } else {
+      const pWins=(h2hData||[]).filter(m=>m.winner_id===playerId).length;
+      const meWins=total-pWins;
+      const pct=Math.round(pWins/total*100);
+      h2hEl.innerHTML=`
+        <div class="h2h-info" style="margin-bottom:.35rem"><span style="color:var(--primary-lt)">${esc(p.name)}: ${pWins}W</span><span>${meWins}W: du</span></div>
+        <div class="h2h-bar"><div class="h2h-bar-fill" style="width:${pct}%"></div></div>
+        <div style="text-align:center;font-size:.8rem;color:var(--text-muted);margin-top:.35rem">${total} Matches insgesamt</div>`;
+    }
+  }
+}
+
+function closeProfile(e) {
+  if (e&&e.target!=$el('profile-overlay')&&e.type==='click') return;
+  $el('profile-overlay').classList.remove('open');
+  document.body.style.overflow='';
+}
+
+async function loadPlayerEloHistory(playerId) {
+  const {data} = await db.from('matches')
+    .select('winner_id,elo_winner_before,elo_winner_after,elo_loser_before,elo_loser_after,created_at')
+    .or(`winner_id.eq.${playerId},loser_id.eq.${playerId}`)
+    .order('created_at',{ascending:true});
+  if (!data?.length) return [];
+  const pts=[];
+  const first=data[0];
+  pts.push({elo:first.winner_id===playerId?first.elo_winner_before:first.elo_loser_before, win:null});
+  for (const m of data) {
+    const win=m.winner_id===playerId;
+    pts.push({elo:win?m.elo_winner_after:m.elo_loser_after, win});
+  }
+  return pts;
+}
+
+function renderEloChart(pts) {
+  if (pts.length<2) return '<p class="text-muted text-center" style="font-size:.85rem;padding:.5rem">Noch zu wenige Matches für einen Verlauf.</p>';
+  const W=480,H=140,pl=48,pr=16,pt=16,pb=24,iW=W-pl-pr,iH=H-pt-pb;
+  const elos=pts.map(p=>p.elo);
+  const minE=Math.min(...elos)-20, maxE=Math.max(...elos)+20, range=maxE-minE||1;
+  const cx=i=>pl+(i/(pts.length-1))*iW;
+  const cy=e=>pt+iH-((e-minE)/range)*iH;
+  const poly=pts.map((p,i)=>`${cx(i)},${cy(p.elo)}`).join(' ');
+  const area=[`${pl},${pt+iH}`, ...pts.map((p,i)=>`${cx(i)},${cy(p.elo)}`), `${pl+iW},${pt+iH}`].join(' ');
+  const steps=Math.ceil(range/4/50)*50||50;
+  const labels=[];
+  for(let e=Math.ceil(minE/steps)*steps;e<=maxE;e+=steps) labels.push({e,y:cy(e)});
+  const dots=pts.slice(1).map((p,i)=>({x:cx(i+1),y:cy(p.elo),w:p.win}));
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
+    <defs><linearGradient id="eg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--primary)" stop-opacity=".25"/><stop offset="100%" stop-color="var(--primary)" stop-opacity="0"/></linearGradient></defs>
+    ${labels.map(l=>`<line x1="${pl}" y1="${l.y}" x2="${W-pr}" y2="${l.y}" stroke="var(--border)" stroke-width="1"/>
+      <text x="${pl-6}" y="${l.y+4}" text-anchor="end" font-size="9" fill="var(--text-muted)">${l.e}</text>`).join('')}
+    <polygon points="${area}" fill="url(#eg)"/>
+    <polyline points="${poly}" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linejoin="round"/>
+    ${dots.map(d=>`<circle cx="${d.x}" cy="${d.y}" r="3.5" fill="${d.w===null?'var(--primary)':d.w?'var(--success)':'var(--error)'}" stroke="var(--card)" stroke-width="1.5"/>`).join('')}
+  </svg>`;
+}
+
+// ── STATS VIEW ────────────────────────────────────────────────────────────
+async function renderStatsView() {
+  $el('month-name').textContent = fmtMonth(new Date());
+  const now=new Date(), som=new Date(now.getFullYear(),now.getMonth(),1);
+  const {data:mData} = await db.from('matches').select('winner_id,loser_id,elo_delta,elo_loser_before,elo_loser_after').gte('created_at',som.toISOString());
+
+  const gains={};
+  for (const m of mData||[]) {
+    const loss=(m.elo_loser_before||0)-(m.elo_loser_after||0);
+    gains[m.winner_id]=(gains[m.winner_id]||0)+(m.elo_delta||0);
+    gains[m.loser_id]=(gains[m.loser_id]||0)-loss;
+  }
+  const sorted=Object.entries(gains).sort((a,b)=>b[1]-a[1]);
+  const el=$el('monthly-list');
+  if (!sorted.length) { el.innerHTML='<div class="text-muted" style="font-size:.85rem">Diesen Monat noch keine Matches.</div>'; }
+  else {
+    el.innerHTML='<div class="monthly-list">'+sorted.slice(0,8).map(([id,d],i)=>{
+      const p=byId(id); if (!p) return '';
+      const col=d>=0?'var(--success)':'var(--error)';
+      return `<div class="monthly-row">
+        <span class="monthly-rank">${i+1}</span>
+        <span class="monthly-name">${esc(p.name)}</span>
+        <span class="monthly-delta" style="color:${col}">${d>=0?'+':''}${Math.round(d)}</span>
+      </div>`;
+    }).join('')+'</div>';
+  }
+
+  // Form list
+  const {data:recent} = await db.from('matches').select('winner_id,loser_id').order('created_at',{ascending:false}).limit(100);
+  const formEl=$el('form-list');
+  formEl.innerHTML='<div style="display:flex;flex-direction:column;gap:.5rem">'+S.players.map(p=>{
+    const dots=buildFormDots(p.id,recent||[]);
+    if (!dots) return '';
+    const lvl=eloToLevel(p.elo), col=levelColor(lvl);
+    return `<div style="display:flex;align-items:center;gap:.75rem;padding:.5rem .75rem;background:var(--surface);border-radius:var(--radius-sm)">
+      <span style="font-weight:600;font-size:.88rem;flex:1">${esc(p.name)}</span>
+      <span class="level-badge" style="color:${col};background:${col}18;font-size:.72rem">${lvl.toFixed(1)}</span>
+      <div class="form-dots">${dots}</div>
+    </div>`;
+  }).filter(Boolean).join('')+'</div>';
+}
+
+function buildH2HSelects() {
+  const opts='<option value="">Spieler wählen</option>'+S.players.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  $el('h2h-p1').innerHTML=opts; $el('h2h-p2').innerHTML=opts;
+  if (S.player) $el('h2h-p1').value=S.player.id;
+}
+
+async function loadH2HStats() {
+  const p1id=$el('h2h-p1').value, p2id=$el('h2h-p2').value;
+  const el=$el('h2h-result'); el.innerHTML='';
+  if (!p1id||!p2id||p1id===p2id) return;
+  const p1=byId(p1id), p2=byId(p2id);
+  const {data} = await db.from('matches').select('winner_id,sets,created_at')
+    .or(`and(winner_id.eq.${p1id},loser_id.eq.${p2id}),and(winner_id.eq.${p2id},loser_id.eq.${p1id})`)
+    .order('created_at',{ascending:false});
+  const matches=data||[];
+  if (!matches.length) { el.innerHTML='<div class="text-muted" style="font-size:.85rem">Noch keine Matches zwischen diesen Spielern.</div>'; return; }
+  const p1w=matches.filter(m=>m.winner_id===p1id).length, p2w=matches.length-p1w;
+  const pct=Math.round(p1w/matches.length*100);
+  el.innerHTML=`
+    <div class="h2h-info"><span style="color:var(--primary-lt);font-weight:700">${esc(p1.name)}: ${p1w} Siege</span><span style="color:var(--text-muted);font-weight:700">${p2w} Siege: ${esc(p2.name)}</span></div>
+    <div class="h2h-bar" style="margin:.5rem 0"><div class="h2h-bar-fill" style="width:${pct}%"></div></div>
+    <div style="text-align:center;font-size:.8rem;color:var(--text-muted)">${matches.length} Matches · letzte: ${fmtDate(matches[0]?.created_at)}</div>`;
 }
 
 // ── MATCH FORM ────────────────────────────────────────────────────────────
 function buildMatchSelects() {
-  const p1 = $el('m-p1');
-  const p2 = $el('m-p2');
-
+  const p1=$el('m-p1'), p2=$el('m-p2');
   if (S.isAdmin) {
-    p1.disabled = false;
-    p1.innerHTML = S.players.map(p =>
-      `<option value="${p.id}" ${p.id === S.player?.id ? 'selected' : ''}>${esc(p.name)}</option>`
-    ).join('');
+    p1.disabled=false;
+    p1.innerHTML=S.players.map(p=>`<option value="${p.id}" ${p.id===S.player?.id?'selected':''}>${esc(p.name)}</option>`).join('');
   } else {
-    p1.disabled = true;
-    p1.innerHTML = S.player
-      ? `<option value="${S.player.id}">${esc(S.player.name)}</option>`
-      : '<option value="">— Kein Spielerprofil —</option>';
+    p1.disabled=true;
+    p1.innerHTML=S.player?`<option value="${S.player.id}">${esc(S.player.name)}</option>`:'<option>—</option>';
   }
-
-  refreshP2Options();
+  refreshP2();
 }
-
-function refreshP2Options() {
-  const p1id = $el('m-p1').value;
-  const p2   = $el('m-p2');
-  const prev = p2.value;
-  p2.innerHTML = '<option value="">— Gegner auswählen —</option>' +
-    S.players
-      .filter(p => p.id !== p1id)
-      .map(p => `<option value="${p.id}" ${p.id === prev ? 'selected' : ''}>${esc(p.name)}${p.club ? ` (${esc(p.club)})` : ''}</option>`)
-      .join('');
+function refreshP2() {
+  const p1id=$el('m-p1').value, p2=$el('m-p2'), prev=p2.value;
+  p2.innerHTML='<option value="">— Gegner auswählen —</option>'+S.players.filter(p=>p.id!==p1id).map(p=>`<option value="${p.id}" ${p.id===prev?'selected':''}>${esc(p.name)}${p.club?` (${esc(p.club)})`:''}</option>`).join('');
 }
-
-function onPlayerChange() {
-  refreshP2Options();
-  updateEloPreview();
-}
+function onPlayerChange() { refreshP2(); updateEloPreview(); }
 
 function updateEloPreview() {
-  const p1 = byId($el('m-p1').value);
-  const p2 = byId($el('m-p2').value);
-  const card = $el('elo-preview');
-
-  if (!p1 || !p2) { card.style.display = 'none'; return; }
-
-  card.style.display = 'block';
-  $el('p1-label-bar').textContent = p1.name;
-  $el('p2-label-bar').textContent = p2.name;
-
-  const eW   = expected(p1.elo, p2.elo);
-  const pct  = Math.round(eW * 100);
-  $el('win-bar-fill').style.width = `${pct}%`;
-  $el('win-pct-txt').textContent  = `${pct}% Siegchance für ${p1.name}`;
-
-  const ifWin  = calcElo(p1.elo, p2.elo, p1.matches, p2.matches);
-  const ifLoss = calcElo(p2.elo, p1.elo, p2.matches, p1.matches);
-
-  $el('ep-win-val').textContent  = `+${ifWin.gain}`;
-  $el('ep-win-tot').textContent  = `→ ${ifWin.wNew}`;
-  $el('ep-loss-val').textContent = `−${ifLoss.loss}`;
-  $el('ep-loss-tot').textContent = `→ ${ifLoss.lNew}`;
+  const p1=byId($el('m-p1').value), p2=byId($el('m-p2').value), card=$el('elo-preview');
+  if (!p1||!p2) { card.style.display='none'; return; }
+  card.style.display='block';
+  $el('p1-label-bar').textContent=p1.name; $el('p2-label-bar').textContent=p2.name;
+  const eW=expected(p1.elo,p2.elo), pct=Math.round(eW*100);
+  $el('win-bar-fill').style.width=`${pct}%`;
+  $el('win-pct-txt').textContent=`${pct}% Siegchance für ${p1.name}`;
+  const ifW=calcElo(p1.elo,p2.elo,p1.matches,p2.matches);
+  const ifL=calcElo(p2.elo,p1.elo,p2.matches,p1.matches);
+  $el('ep-win-val').textContent=`+${ifW.gain}`; $el('ep-win-tot').textContent=`→ ${ifW.wNew}`;
+  $el('ep-loss-val').textContent=`−${ifL.loss}`; $el('ep-loss-tot').textContent=`→ ${ifL.lNew}`;
 }
 
 function onScoreInput() {
-  const vals = {
-    s1a: $el('s1a').value, s1b: $el('s1b').value,
-    s2a: $el('s2a').value, s2b: $el('s2b').value,
-    s3a: $el('s3a').value, s3b: $el('s3b').value
-  };
-
-  renderSetTag('s1-tag', vals.s1a, vals.s1b);
-  renderSetTag('s2-tag', vals.s2a, vals.s2b);
-
-  const w1 = setWinner(vals.s1a, vals.s1b);
-  const w2 = setWinner(vals.s2a, vals.s2b);
-  const need3 = w1 !== 0 && w2 !== 0 && w1 !== w2;
-  const row3  = $el('set3-row');
-
-  if (need3) {
-    row3.style.display = 'flex';
-    renderSetTag('s3-tag', vals.s3a, vals.s3b);
-  } else {
-    row3.style.display = 'none';
-    $el('s3a').value = ''; $el('s3b').value = '';
-    $el('s3-tag').textContent = ''; $el('s3-tag').className = 'set-tag';
-  }
-
-  renderMatchPreview(vals, w1, w2, need3);
+  const v={s1a:$el('s1a').value,s1b:$el('s1b').value,s2a:$el('s2a').value,s2b:$el('s2b').value,s3a:$el('s3a').value,s3b:$el('s3b').value};
+  renderSetTag('s1-tag',v.s1a,v.s1b); renderSetTag('s2-tag',v.s2a,v.s2b);
+  const w1=setWinner(v.s1a,v.s1b), w2=setWinner(v.s2a,v.s2b), need3=w1!==0&&w2!==0&&w1!==w2;
+  const r3=$el('set3-row');
+  if (need3) { r3.style.display='flex'; renderSetTag('s3-tag',v.s3a,v.s3b); }
+  else { r3.style.display='none'; ['s3a','s3b'].forEach(id=>$el(id).value=''); $el('s3-tag').textContent=''; $el('s3-tag').className='set-tag'; }
+  renderMatchPreview(v,w1,w2,need3);
 }
-
-function renderSetTag(id, a, b) {
-  const el = $el(id);
-  if (a === '' || b === '') { el.textContent = ''; el.className = 'set-tag'; return; }
-  if (!validSet(a, b)) { el.textContent = 'Ungültig'; el.className = 'set-tag invalid'; return; }
-  const w = setWinner(a, b);
-  el.textContent = w === 1 ? 'S1 gewinnt' : 'S2 gewinnt';
-  el.className = `set-tag ${w === 1 ? 'win' : 'loss'}`;
+function renderSetTag(id,a,b) {
+  const el=$el(id);
+  if (a===''||b==='') { el.textContent=''; el.className='set-tag'; return; }
+  if (!validSet(a,b)) { el.textContent='Ungültig'; el.className='set-tag invalid'; return; }
+  const w=setWinner(a,b); el.textContent=w===1?'S1 gewinnt':'S2 gewinnt'; el.className=`set-tag ${w===1?'win':'loss'}`;
 }
-
-function renderMatchPreview(v, w1, w2, need3) {
-  const el = $el('match-result-preview');
-  if (!w1 || !w2) { el.innerHTML = ''; return; }
-
-  let p1s = (w1 === 1 ? 1 : 0) + (w2 === 1 ? 1 : 0);
-  let p2s = (w1 === 2 ? 1 : 0) + (w2 === 2 ? 1 : 0);
-
-  if (need3) {
-    const w3 = setWinner(v.s3a, v.s3b);
-    if (!w3) { el.innerHTML = '<span class="text-muted" style="font-size:.85rem">1:1 – Satz 3 eintragen</span>'; return; }
-    if (w3 === 1) p1s++; else p2s++;
-  }
-
-  const p1 = byId($el('m-p1').value);
-  const p2 = byId($el('m-p2').value);
-  if (!p1 || !p2) { el.innerHTML = ''; return; }
-
-  const wName = p1s > p2s ? p1.name : p2.name;
-  el.innerHTML = `<strong style="color:var(--success)">${esc(wName)}</strong> <span class="text-muted">gewinnt</span> <strong>${p1s}:${p2s}</strong>`;
+function renderMatchPreview(v,w1,w2,need3) {
+  const el=$el('match-result-preview');
+  if (!w1||!w2) { el.innerHTML=''; return; }
+  let p1s=(w1===1?1:0)+(w2===1?1:0), p2s=(w1===2?1:0)+(w2===2?1:0);
+  if (need3) { const w3=setWinner(v.s3a,v.s3b); if(!w3){el.innerHTML='<span class="text-muted" style="font-size:.85rem">1:1 — Satz 3 eintragen</span>';return;} if(w3===1)p1s++;else p2s++; }
+  const p1=byId($el('m-p1').value), p2=byId($el('m-p2').value);
+  if (!p1||!p2) { el.innerHTML=''; return; }
+  const wn=p1s>p2s?p1.name:p2.name;
+  el.innerHTML=`<strong style="color:var(--success)">${esc(wn)}</strong> <span class="text-muted">gewinnt</span> <strong>${p1s}:${p2s}</strong>`;
 }
 
 async function submitMatch() {
-  const p1id = $el('m-p1').value;
-  const p2id = $el('m-p2').value;
-  const alertEl = $el('match-alert');
-  alertEl.innerHTML = '';
-
-  if (!p1id || !p2id) {
-    alertEl.innerHTML = '<div class="alert alert-error">Bitte beide Spieler auswählen.</div>'; return;
+  const p1id=$el('m-p1').value, p2id=$el('m-p2').value, alEl=$el('match-alert');
+  alEl.innerHTML='';
+  if (!p1id||!p2id) { alEl.innerHTML='<div class="alert alert-error">Bitte beide Spieler auswählen.</div>'; return; }
+  if (p1id===p2id) { alEl.innerHTML='<div class="alert alert-error">Spieler können nicht gegen sich selbst spielen.</div>'; return; }
+  const sa=[$el('s1a').value,$el('s2a').value], sb=[$el('s1b').value,$el('s2b').value];
+  if (!validSet(sa[0],sb[0])||!validSet(sa[1],sb[1])) { alEl.innerHTML='<div class="alert alert-error">Bitte gültige Sätze 1 und 2 eintragen.</div>'; return; }
+  const w1=setWinner(sa[0],sb[0]), w2=setWinner(sa[1],sb[1]);
+  let sets=[{p1:Number(sa[0]),p2:Number(sb[0])},{p1:Number(sa[1]),p2:Number(sb[1])}];
+  let p1s=(w1===1?1:0)+(w2===1?1:0), p2s=(w1===2?1:0)+(w2===2?1:0);
+  if (w1!==w2) {
+    const s3a=$el('s3a').value, s3b=$el('s3b').value;
+    if (!validSet(s3a,s3b)) { alEl.innerHTML='<div class="alert alert-error">Steht 1:1 — bitte Satz 3 eintragen.</div>'; return; }
+    sets.push({p1:Number(s3a),p2:Number(s3b)});
+    const w3=setWinner(s3a,s3b); if(w3===1)p1s++;else p2s++;
   }
-  if (p1id === p2id) {
-    alertEl.innerHTML = '<div class="alert alert-error">Spieler können nicht gegen sich selbst spielen.</div>'; return;
-  }
-
-  const sa = [$el('s1a').value, $el('s2a').value];
-  const sb = [$el('s1b').value, $el('s2b').value];
-
-  if (!validSet(sa[0], sb[0]) || !validSet(sa[1], sb[1])) {
-    alertEl.innerHTML = '<div class="alert alert-error">Bitte gültige Satzstände für Satz 1 und 2 eintragen.</div>'; return;
-  }
-
-  const w1 = setWinner(sa[0], sb[0]);
-  const w2 = setWinner(sa[1], sb[1]);
-
-  let sets = [
-    { p1: Number(sa[0]), p2: Number(sb[0]) },
-    { p1: Number(sa[1]), p2: Number(sb[1]) }
-  ];
-
-  let p1sets = (w1===1?1:0)+(w2===1?1:0);
-  let p2sets = (w1===2?1:0)+(w2===2?1:0);
-
-  if (w1 !== w2) {
-    const s3a = $el('s3a').value, s3b = $el('s3b').value;
-    if (!validSet(s3a, s3b)) {
-      alertEl.innerHTML = '<div class="alert alert-error">Steht 1:1 – bitte auch Satz 3 eintragen.</div>'; return;
-    }
-    sets.push({ p1: Number(s3a), p2: Number(s3b) });
-    const w3 = setWinner(s3a, s3b);
-    if (w3 === 1) p1sets++; else p2sets++;
-  }
-
-  const p1 = byId(p1id), p2 = byId(p2id);
-  if (!p1 || !p2) { alertEl.innerHTML = '<div class="alert alert-error">Spieler nicht gefunden.</div>'; return; }
-
-  const winnerId = p1sets > p2sets ? p1id : p2id;
-  const loserId  = p1sets > p2sets ? p2id : p1id;
-  const winner   = winnerId === p1id ? p1 : p2;
-  const loser    = winnerId === p1id ? p2 : p1;
-
-  const elo = calcElo(winner.elo, loser.elo, winner.matches, loser.matches);
-
-  const btn = $el('btn-submit-match');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span> Speichern…';
-
+  const p1=byId(p1id), p2=byId(p2id);
+  if (!p1||!p2) { alEl.innerHTML='<div class="alert alert-error">Spieler nicht gefunden.</div>'; return; }
+  const wid=p1s>p2s?p1id:p2id, lid=p1s>p2s?p2id:p1id;
+  const w=byId(wid), l=byId(lid);
+  const elo=calcElo(w.elo,l.elo,w.matches,l.matches);
+  const btn=$el('btn-submit-match'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Speichern…';
   try {
-    const { error: me } = await db.from('matches').insert({
-      winner_id: winnerId, loser_id: loserId, sets,
-      elo_winner_before: winner.elo, elo_winner_after: elo.wNew,
-      elo_loser_before:  loser.elo,  elo_loser_after:  elo.lNew,
-      elo_delta: elo.gain
-    });
-    if (me) throw me;
-
-    const { error: we } = await db.from('players')
-      .update({ elo: elo.wNew, wins: winner.wins + 1, matches: winner.matches + 1 })
-      .eq('id', winnerId);
-    if (we) throw we;
-
-    const { error: le } = await db.from('players')
-      .update({ elo: elo.lNew, losses: loser.losses + 1, matches: loser.matches + 1 })
-      .eq('id', loserId);
-    if (le) throw le;
-
-    // Reset form
-    ['s1a','s1b','s2a','s2b','s3a','s3b'].forEach(id => $el(id).value = '');
-    ['s1-tag','s2-tag','s3-tag'].forEach(id => { $el(id).textContent = ''; $el(id).className = 'set-tag'; });
-    $el('set3-row').style.display = 'none';
-    $el('match-result-preview').innerHTML = '';
-    $el('m-p2').value = '';
-    $el('elo-preview').style.display = 'none';
-
-    toast(`✓ Match eingetragen — ${winner.name} +${elo.gain} Elo`, 'success');
-
-    await loadPlayers();
-    renderRanking();
-    buildMatchSelects();
-    if (S.player) S.player = byId(S.player.id) || S.player;
-
-  } catch (err) {
-    console.error(err);
-    alertEl.innerHTML = `<div class="alert alert-error">Fehler: ${err.message}</div>`;
-  }
-
-  btn.disabled = false;
-  btn.innerHTML = 'Match eintragen';
+    const {error:me}=await db.from('matches').insert({winner_id:wid,loser_id:lid,sets,elo_winner_before:w.elo,elo_winner_after:elo.wNew,elo_loser_before:l.elo,elo_loser_after:elo.lNew,elo_delta:elo.gain});
+    if(me)throw me;
+    const {error:we}=await db.from('players').update({elo:elo.wNew,wins:w.wins+1,matches:w.matches+1}).eq('id',wid);
+    if(we)throw we;
+    const {error:le}=await db.from('players').update({elo:elo.lNew,losses:l.losses+1,matches:l.matches+1}).eq('id',lid);
+    if(le)throw le;
+    ['s1a','s1b','s2a','s2b','s3a','s3b'].forEach(id=>$el(id).value='');
+    ['s1-tag','s2-tag','s3-tag'].forEach(id=>{$el(id).textContent='';$el(id).className='set-tag';});
+    $el('set3-row').style.display='none'; $el('match-result-preview').innerHTML='';
+    $el('m-p2').value=''; $el('elo-preview').style.display='none';
+    toast(`✓ ${w.name} gewinnt +${elo.gain} Elo`,'success');
+    await loadPlayers(); renderRanking(); buildMatchSelects();
+    if(S.player) S.player=byId(S.player.id)||S.player;
+  } catch(err) { console.error(err); alEl.innerHTML=`<div class="alert alert-error">Fehler: ${err.message}</div>`; }
+  btn.disabled=false; btn.innerHTML='Match eintragen';
 }
 
 // ── HISTORY ───────────────────────────────────────────────────────────────
 function buildHistoryFilter() {
-  const sel = $el('history-filter');
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">Alle Spieler</option>' +
-    S.players.map(p => `<option value="${p.id}" ${p.id === cur ? 'selected' : ''}>${esc(p.name)}</option>`).join('');
+  const sel=$el('history-filter'), cur=sel.value;
+  sel.innerHTML='<option value="">Alle Spieler</option>'+S.players.map(p=>`<option value="${p.id}" ${p.id===cur?'selected':''}>${esc(p.name)}</option>`).join('');
 }
-
 async function loadHistory() {
-  const listEl = $el('history-list');
-  listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade…</p></div>';
-
-  const filter = $el('history-filter').value;
-
-  let q = db.from('matches').select('*').order('created_at', { ascending: false }).limit(60);
-  if (filter) q = q.or(`winner_id.eq.${filter},loser_id.eq.${filter}`);
-
-  const { data, error } = await q;
-
-  if (error) {
-    listEl.innerHTML = `<div class="alert alert-error">Fehler: ${error.message}</div>`;
-    return;
-  }
-  if (!data?.length) {
-    listEl.innerHTML = '<div class="empty-state"><div class="empty-icon">🏓</div><p>Noch keine Matches.</p></div>';
-    return;
-  }
-
-  listEl.innerHTML = data.map(m => {
-    const wPlayer = byId(m.winner_id);
-    const lPlayer = byId(m.loser_id);
-    const wName   = wPlayer ? esc(wPlayer.name) : 'Unbekannt';
-    const lName   = lPlayer ? esc(lPlayer.name) : 'Unbekannt';
-    const delta   = m.elo_delta || 0;
-    const lLoss   = m.elo_loser_before != null && m.elo_loser_after != null
-      ? Math.abs(m.elo_loser_before - m.elo_loser_after) : delta;
-
-    const sets = Array.isArray(m.sets) ? m.sets : [];
-    const setsHtml = sets.map(s => {
-      const a = s.p1 ?? s.w ?? '?';
-      const b = s.p2 ?? s.l ?? '?';
-      return `<span class="set-chip">${a}:${b}</span>`;
-    }).join('');
-
-    return `
-      <div class="match-card">
-        <div>
-          <div class="match-player winner">${wName}</div>
-          <div class="match-elo pos">+${delta} Elo</div>
-        </div>
-        <div class="match-center">
-          <div class="match-sets">${setsHtml}</div>
-          <div class="match-date">${fmtDate(m.created_at)}</div>
-        </div>
-        <div class="match-right">
-          <div class="match-player loser">${lName}</div>
-          <div class="match-elo neg">−${lLoss} Elo</div>
-        </div>
-      </div>`;
+  const el=$el('history-list'); el.innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade…</p></div>';
+  const filt=$el('history-filter').value;
+  let q=db.from('matches').select('*').order('created_at',{ascending:false}).limit(60);
+  if(filt) q=q.or(`winner_id.eq.${filt},loser_id.eq.${filt}`);
+  const {data,error}=await q;
+  if(error){el.innerHTML=`<div class="alert alert-error">Fehler: ${error.message}</div>`;return;}
+  if(!data?.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">🏓</div><p>Noch keine Matches.</p></div>';return;}
+  el.innerHTML=data.map(m=>{
+    const wP=byId(m.winner_id), lP=byId(m.loser_id);
+    const sets=(m.sets||[]).map(s=>`<span class="set-chip">${s.p1??'?'}:${s.p2??'?'}</span>`).join('');
+    const lLoss=m.elo_loser_before!=null&&m.elo_loser_after!=null?Math.abs(m.elo_loser_before-m.elo_loser_after):m.elo_delta||0;
+    return `<div class="match-card">
+      <div><div class="match-player winner">${wP?esc(wP.name):'?'}</div><div class="match-elo pos">+${m.elo_delta||0} Elo</div></div>
+      <div class="match-center"><div class="match-sets">${sets}</div><div class="match-date">${fmtDate(m.created_at)}</div></div>
+      <div class="match-right"><div class="match-player loser">${lP?esc(lP.name):'?'}</div><div class="match-elo neg">−${lLoss} Elo</div></div>
+    </div>`;
   }).join('');
 }
 
 // ── ADMIN ─────────────────────────────────────────────────────────────────
 async function saveSettings() {
-  const kh = $inum('k-high'), kl = $inum('k-low');
-  const al = $el('settings-alert');
-  al.innerHTML = '';
-
-  if (!kh || !kl || kh < 1 || kl < 1) {
-    al.innerHTML = '<div class="alert alert-error">Ungültige Werte.</div>'; return;
-  }
-
-  // Try update first row; use upsert fallback
-  const { data: existing } = await db.from('settings').select('id').limit(1).maybeSingle();
-  let error;
-  if (existing) {
-    ({ error } = await db.from('settings').update({ k_high: kh, k_low: kl }).eq('id', existing.id));
-  } else {
-    ({ error } = await db.from('settings').insert({ k_high: kh, k_low: kl }));
-  }
-
-  if (error) { al.innerHTML = `<div class="alert alert-error">Fehler: ${error.message}</div>`; return; }
-
-  S.settings = { k_high: kh, k_low: kl };
-  al.innerHTML = '<div class="alert alert-success">Gespeichert!</div>';
-  toast('K-Faktor aktualisiert', 'success');
-  setTimeout(() => { al.innerHTML = ''; }, 3000);
+  const kh=$inum('k-high'),kl=$inum('k-low'),al=$el('settings-alert'); al.innerHTML='';
+  if(!kh||!kl||kh<1||kl<1){al.innerHTML='<div class="alert alert-error">Ungültige Werte.</div>';return;}
+  const {data:ex}=await db.from('settings').select('id').limit(1).maybeSingle();
+  const {error}=ex?await db.from('settings').update({k_high:kh,k_low:kl}).eq('id',ex.id):await db.from('settings').insert({k_high:kh,k_low:kl});
+  if(error){al.innerHTML=`<div class="alert alert-error">Fehler: ${error.message}</div>`;return;}
+  S.settings={k_high:kh,k_low:kl};
+  al.innerHTML='<div class="alert alert-success">Gespeichert!</div>'; toast('K-Faktor aktualisiert','success');
+  setTimeout(()=>al.innerHTML='',3000);
 }
-
 function renderAdminPlayers() {
-  const tbody = $el('admin-tbody');
-  tbody.innerHTML = S.players.map(p => `
-    <tr>
+  $el('admin-tbody').innerHTML=S.players.map(p=>{
+    const lvl=eloToLevel(p.elo),col=levelColor(lvl);
+    return `<tr>
       <td><strong>${esc(p.name)}</strong></td>
-      <td>${p.club ? esc(p.club) : '<span class="text-muted">—</span>'}</td>
+      <td>${p.club?esc(p.club):'<span class="text-muted">—</span>'}</td>
       <td style="font-weight:700">${p.elo}</td>
+      <td><span class="level-badge" style="color:${col};background:${col}18">${lvl.toFixed(1)}</span></td>
       <td>${p.matches}</td>
-      <td>${p.is_admin ? '<span class="badge badge-admin">Admin</span>' : ''}</td>
-      <td>
-        <button class="btn btn-danger btn-sm" onclick="resetPlayerElo('${p.id}','${esc(p.name)}')">Elo reset</button>
-      </td>
-    </tr>`).join('');
+      <td>${p.is_admin?'<span class="badge badge-admin">Admin</span>':''}</td>
+      <td><button class="btn btn-danger btn-sm" onclick="resetPlayerElo('${p.id}','${esc(p.name)}')">Reset</button></td>
+    </tr>`;
+  }).join('');
 }
-
-async function resetPlayerElo(pid, name) {
-  if (!confirm(`Elo von "${name}" auf 1200 zurücksetzen und alle Stats löschen?`)) return;
-  const { error } = await db.from('players')
-    .update({ elo: 1200, wins: 0, losses: 0, matches: 0 })
-    .eq('id', pid);
-  if (error) { toast(`Fehler: ${error.message}`, 'error'); return; }
-  toast(`${name} zurückgesetzt`, 'success');
-  await loadPlayers();
-  renderRanking();
-  renderAdminPlayers();
+async function resetPlayerElo(pid,name) {
+  if(!confirm(`Elo von "${name}" auf 1200 zurücksetzen?`))return;
+  const{error}=await db.from('players').update({elo:1200,wins:0,losses:0,matches:0}).eq('id',pid);
+  if(error){toast(`Fehler: ${error.message}`,'error');return;}
+  toast(`${name} zurückgesetzt`,'success'); await loadPlayers(); renderRanking(); renderAdminPlayers();
 }
 
 // ── NAVIGATION ────────────────────────────────────────────────────────────
 function showView(id) {
-  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-btn,.bnav-btn').forEach(b=>b.classList.remove('active'));
   $el(`view-${id}`).classList.add('active');
-  document.querySelector(`.nav-btn[data-view="${id}"]`)?.classList.add('active');
-
-  if (id === 'history') { buildHistoryFilter(); loadHistory(); }
-  else if (id === 'ranking') { loadPlayers().then(renderRanking); }
-  else if (id === 'admin')   { renderAdminPlayers(); }
+  document.querySelectorAll(`[data-view="${id}"]`).forEach(b=>b.classList.add('active'));
+  if(id==='history'){buildHistoryFilter();loadHistory();}
+  else if(id==='ranking'){loadPlayers().then(renderRanking);}
+  else if(id==='admin'){renderAdminPlayers();}
+  else if(id==='stats'){renderStatsView();}
 }
 
-function showPage(page) {
-  $el('loading').style.display    = 'none';
-  $el('auth-page').style.display  = page === 'auth' ? 'flex' : 'none';
-  $el('app-page').style.display   = page === 'app'  ? 'block' : 'none';
-}
-
-// ── SECURITY HELPER ───────────────────────────────────────────────────────
-function esc(str) {
-  return String(str).replace(/[&<>"']/g, c =>
-    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]
-  );
+function showPage(p) {
+  $el('loading').style.display='none';
+  $el('auth-page').style.display=p==='auth'?'flex':'none';
+  $el('app-page').style.display=p==='app'?'block':'none';
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────
-let _initialized = false;
-
+let _initialized=false;
 async function init() {
-  // Safety net: if loading takes > 10 s, fall back to auth page
-  const loadingTimer = setTimeout(() => {
-    if (!_initialized) {
-      console.warn('PingLeague: loading timeout — showing auth page');
-      showPage('auth');
-    }
-  }, 10000);
-
+  const t=setTimeout(()=>{if(!_initialized)showPage('auth');},10000);
   try {
-    // Auth state listener — handles all events including INITIAL_SESSION (Safari/Firefox)
-    db.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_OUT') {
-        S.user = null; S.player = null; S.isAdmin = false;
-        _initialized = false;
-        clearTimeout(loadingTimer);
-        showPage('auth');
-      } else if (session?.user &&
-        (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED')) {
-        if (!_initialized || S.user?.id !== session.user.id) {
-          _initialized = true;
-          clearTimeout(loadingTimer);
-          await setupUser(session.user);
+    db.auth.onAuthStateChange(async(event,session)=>{
+      if(event==='SIGNED_OUT'){S.user=null;S.player=null;S.isAdmin=false;_initialized=false;clearTimeout(t);showPage('auth');}
+      else if(session?.user&&(event==='SIGNED_IN'||event==='INITIAL_SESSION'||event==='TOKEN_REFRESHED')){
+        if(!_initialized||S.user?.id!==session.user.id){
+          _initialized=true;clearTimeout(t);
+          try{await setupUser(session.user);}catch(e){console.error('setupUser:',e);showPage('auth');}
         }
       }
     });
-
-    // Explicit session check — critical for Safari & hard reloads
-    const { data: { session }, error } = await db.auth.getSession();
-    if (error) console.error('getSession:', error);
-
-    if (session?.user && !_initialized) {
-      _initialized = true;
-      clearTimeout(loadingTimer);
-      await setupUser(session.user);
-    } else if (!session?.user && !_initialized) {
-      clearTimeout(loadingTimer);
-      showPage('auth');
-    }
-
-  } catch (err) {
-    console.error('PingLeague init error:', err);
-    clearTimeout(loadingTimer);
-    showPage('auth');
-  }
-
-  // Keyboard: Enter submits login/register
-  $el('login-pw').addEventListener('keydown',   e => e.key === 'Enter' && doLogin());
-  $el('login-email').addEventListener('keydown', e => e.key === 'Enter' && doLogin());
-  $el('reg-pw').addEventListener('keydown',     e => e.key === 'Enter' && doRegister());
+    const{data:{session},error}=await db.auth.getSession();
+    if(error)console.error(error);
+    if(session?.user&&!_initialized){_initialized=true;clearTimeout(t);await setupUser(session.user);}
+    else if(!session?.user&&!_initialized){clearTimeout(t);showPage('auth');}
+  } catch(err){console.error(err);clearTimeout(t);showPage('auth');}
+  $el('login-pw').addEventListener('keydown',e=>e.key==='Enter'&&doLogin());
+  $el('login-email').addEventListener('keydown',e=>e.key==='Enter'&&doLogin());
+  $el('reg-pw').addEventListener('keydown',e=>e.key==='Enter'&&doRegister());
 }
-
 init();
 </script>
 </body>
