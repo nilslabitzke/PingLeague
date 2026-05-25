@@ -995,23 +995,49 @@ function showPage(p) {
 
 // ── INIT ──────────────────────────────────────────────────────────────────
 let _initialized=false;
+
+// Nuclear fallback: no matter what, clear loading after 5s
+setTimeout(()=>{
+  if(document.getElementById('loading').style.display!=='none'){
+    console.warn('Nuclear fallback triggered');
+    showPage(S.user?'app':'auth');
+  }
+},5000);
+
 async function init() {
-  const t=setTimeout(()=>{if(!_initialized)showPage('auth');},10000);
-  try {
-    db.auth.onAuthStateChange(async(event,session)=>{
-      if(event==='SIGNED_OUT'){S.user=null;S.player=null;S.isAdmin=false;_initialized=false;clearTimeout(t);showPage('auth');}
-      else if(session?.user&&(event==='SIGNED_IN'||event==='INITIAL_SESSION'||event==='TOKEN_REFRESHED')){
-        if(!_initialized||S.user?.id!==session.user.id){
-          _initialized=true;clearTimeout(t);
-          try{await setupUser(session.user);}catch(e){console.error('setupUser:',e);showPage('auth');}
-        }
+  // Runtime-only: handle sign-out and token refresh after initial load
+  db.auth.onAuthStateChange(async(event,session)=>{
+    if(event==='SIGNED_OUT'){
+      S.user=null;S.player=null;S.isAdmin=false;_initialized=false;showPage('auth');
+    } else if(session?.user&&(event==='SIGNED_IN'||event==='TOKEN_REFRESHED')){
+      if(!_initialized){
+        _initialized=true;
+        try{await setupUser(session.user);}catch(e){console.error(e);showPage('auth');}
+      } else if(S.user?.id!==session.user.id){
+        _initialized=true;
+        try{await setupUser(session.user);}catch(e){console.error(e);showPage('auth');}
       }
-    });
-    const{data:{session},error}=await db.auth.getSession();
-    if(error)console.error(error);
-    if(session?.user&&!_initialized){_initialized=true;clearTimeout(t);await setupUser(session.user);}
-    else if(!session?.user&&!_initialized){clearTimeout(t);showPage('auth');}
-  } catch(err){console.error(err);clearTimeout(t);showPage('auth');}
+    }
+  });
+
+  // Primary path: getSession() is fast (reads localStorage), always resolves quickly
+  try {
+    const {data,error} = await withTimeout(db.auth.getSession(), 4000, {data:{session:null},error:'timeout'});
+    if(error && error!=='timeout') console.error(error);
+    const session = data?.session;
+    if(!_initialized){
+      _initialized=true;
+      if(session?.user){
+        try{await setupUser(session.user);}catch(e){console.error(e);showPage('auth');}
+      } else {
+        showPage('auth');
+      }
+    }
+  } catch(err){
+    console.error(err);
+    if(!_initialized){_initialized=true;showPage('auth');}
+  }
+
   $el('login-pw').addEventListener('keydown',e=>e.key==='Enter'&&doLogin());
   $el('login-email').addEventListener('keydown',e=>e.key==='Enter'&&doLogin());
   $el('reg-pw').addEventListener('keydown',e=>e.key==='Enter'&&doRegister());
