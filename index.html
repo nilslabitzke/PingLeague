@@ -499,7 +499,7 @@
         <input type="text" id="settings-email" readonly style="opacity:.45;cursor:default">
       </div>
       <button class="btn btn-primary btn-full" id="btn-settings-save" onclick="saveProfileSettings()">Speichern</button>
-      <div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border)">
+      <div id="settings-elo-section" style="display:none;margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border)">
         <button class="btn btn-secondary btn-full" onclick="obStartRecalculate()">↺ Elo neu einschätzen</button>
         <p style="font-size:.75rem;color:var(--text-dim);margin-top:.5rem;text-align:center">Beantworte die 4 Fragen erneut, um dein Elo neu zu berechnen.</p>
       </div>
@@ -673,6 +673,8 @@ function openSettings() {
   $el('settings-club').value = S.player.club || '';
   $el('settings-email').value = S.user?.email || '';
   $el('settings-alert').innerHTML = '';
+  // Only admins may recalculate Elo
+  $el('settings-elo-section').style.display = S.isAdmin ? '' : 'none';
   $el('settings-overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
 }
@@ -1303,6 +1305,7 @@ function obStart() {
 }
 
 function obStartRecalculate() {
+  if (!S.isAdmin) return; // extra guard — button shouldn't be visible anyway
   OB.step = 0; OB.answers = []; OB.mode = 'recalculate';
   // Close settings sheet first, then show onboarding
   $el('settings-overlay').classList.remove('open');
