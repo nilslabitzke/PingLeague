@@ -733,7 +733,7 @@ function applyPlayerData(pd, user) {
   $el('header-user-club').textContent = pd?.club || '';
   $el('admin-nav').style.display = S.isAdmin ? '' : 'none';
   $el('bottom-admin-btn').style.display = S.isAdmin ? '' : 'none';
-  $el('btn-manual-refresh').style.display = S.isAdmin ? '' : 'none';
+  $el('btn-manual-refresh').style.display = '';
 }
 
 async function manualRefresh() {
