@@ -594,7 +594,13 @@ async function doRegister() {
   }
 }
 
-async function doLogout() { await db.auth.signOut(); }
+async function doLogout() {
+  // Clear state and navigate away immediately — don't wait for the network
+  _setupSession++;
+  S.user=null; S.player=null; S.isAdmin=false;
+  showPage('auth');
+  try { await db.auth.signOut(); } catch(e) { console.error('signOut:', e); }
+}
 
 // ── SETUP ─────────────────────────────────────────────────────────────────
 function applyPlayerData(pd, user) {
@@ -606,6 +612,7 @@ function applyPlayerData(pd, user) {
 }
 
 async function setupUser(user) {
+  const mySession = ++_setupSession;
   S.user = user;
   $el('header-user-name').textContent = '';
   $el('header-user-club').textContent = '';
@@ -622,14 +629,18 @@ async function setupUser(user) {
     renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
   }
 
-  // ── STEP 2: Load fresh data in background ─────────────────────────────
+  // ── Load settings in background ───────────────────────────────────────
   withTimeout(db.from('settings').select('*').limit(1).maybeSingle(), 5000, {data:null})
     .then(r => {
+      if (_setupSession !== mySession) return;
       const sd = r?.data;
       if (sd) { S.settings={k_high:sd.k_high||32,k_low:sd.k_low||16}; $el('k-high').value=S.settings.k_high; $el('k-low').value=S.settings.k_low; }
     }).catch(console.error);
 
+  // ── STEP 2: Fresh data from DB ────────────────────────────────────────
   const playersLoaded = await loadPlayers(); // saves to cache internally
+  if (_setupSession !== mySession) return; // user logged out while we were loading
+
   const pd = S.players.find(p => p.user_id === user.id) || null;
 
   if (playersLoaded && !pd) {
@@ -644,9 +655,12 @@ async function setupUser(user) {
 // ── DATA ──────────────────────────────────────────────────────────────────
 async function loadPlayers() {
   try {
-    const {data, error} = await db.from('players').select('*').order('elo',{ascending:false});
-    if (error) { console.error('loadPlayers:', error); return false; }
-    S.players = data || [];
+    const {data, error} = await withTimeout(
+      db.from('players').select('*').order('elo',{ascending:false}),
+      15000, {data: null, error: 'timeout'}
+    );
+    if (!data || error) { console.error('loadPlayers:', error||'timeout'); return false; }
+    S.players = data;
     setCachedPlayers(S.players); // save to cache for instant next load
     return true;
   } catch(e) { console.error('loadPlayers:', e); return false; }
@@ -654,13 +668,17 @@ async function loadPlayers() {
 
 // ── RANKING ───────────────────────────────────────────────────────────────
 async function renderRanking() {
-  // Monthly winner banner
+  // Monthly winner banner (non-blocking — failure just hides the banner)
   await renderMonthBanner();
   const tbody=$el('ranking-tbody');
   if (!S.players.length) { tbody.innerHTML='<tr><td colspan="7" class="text-center text-muted" style="padding:2rem">Noch keine Spieler.</td></tr>'; return; }
 
-  // Load recent matches for form dots
-  const {data:recentMatches} = await db.from('matches').select('winner_id,loser_id,created_at').order('created_at',{ascending:false}).limit(200);
+  // Load recent matches for form dots (timeout so ranking still shows if slow)
+  const matchRes = await withTimeout(
+    db.from('matches').select('winner_id,loser_id,created_at').order('created_at',{ascending:false}).limit(200),
+    8000, {data: null}
+  );
+  const recentMatches = matchRes?.data;
 
   tbody.innerHTML = S.players.map((p,i) => {
     const rank=i+1, lvl=eloToLevel(p.elo), col=levelColor(lvl), ac=avatarCol(p.name);
@@ -688,7 +706,11 @@ function buildFormDots(playerId, matches) {
 
 async function renderMonthBanner() {
   const now=new Date(), startOfMonth=new Date(now.getFullYear(),now.getMonth(),1);
-  const {data} = await db.from('matches').select('winner_id,loser_id,elo_delta,elo_loser_before,elo_loser_after').gte('created_at',startOfMonth.toISOString());
+  const res = await withTimeout(
+    db.from('matches').select('winner_id,loser_id,elo_delta,elo_loser_before,elo_loser_after').gte('created_at',startOfMonth.toISOString()),
+    8000, {data: null}
+  );
+  const data = res?.data;
   const wrap=$el('month-banner-wrap');
   if (!data?.length) { wrap.innerHTML=''; return; }
   const gains={};
@@ -1238,6 +1260,7 @@ function showPage(p) {
 
 // ── INIT ──────────────────────────────────────────────────────────────────
 let _initialized=false;
+let _setupSession=0; // incremented on each setupUser call and on logout to abort stale runs
 
 // Nuclear fallback: always clear loading after 6s no matter what
 setTimeout(()=>{
@@ -1251,6 +1274,7 @@ setTimeout(()=>{
 function init() {
   db.auth.onAuthStateChange(async(event,session)=>{
     if(event==='SIGNED_OUT'){
+      _setupSession++; // abort any in-flight setupUser
       S.user=null;S.player=null;S.isAdmin=false;_initialized=false;showPage('auth');
     } else if(session?.user){
       // Run setupUser if: no user loaded yet, OR a different user signed in
