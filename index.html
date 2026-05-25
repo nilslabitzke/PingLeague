@@ -480,13 +480,20 @@ let S = { user:null, player:null, isAdmin:false, players:[], settings:{ k_high:3
 // ── ELO & LEVEL ──────────────────────────────────────────────────────────
 function expected(ra, rb) { return 1 / (1 + Math.pow(10, (rb - ra) / 400)); }
 
+const ELO_MIN = 100; // floor so Elo can never go below 100
+
 function calcElo(wElo, lElo, wM, lM) {
   const kW = wM < 30 ? S.settings.k_high : S.settings.k_low;
   const kL = lM < 30 ? S.settings.k_high : S.settings.k_low;
   const eW = expected(wElo, lElo);
   const gain = Math.round(kW * (1 - eW));
   const loss = Math.round(kL * eW);
-  return { wNew: wElo + gain, lNew: lElo - loss, gain, loss };
+  return {
+    wNew: Math.max(ELO_MIN, wElo + gain),
+    lNew: Math.max(ELO_MIN, lElo - loss),
+    gain,
+    loss
+  };
 }
 
 function eloToLevel(elo) {
@@ -809,10 +816,13 @@ async function openProfile(playerId) {
   overlay.classList.add('open');
   document.body.style.overflow='hidden';
 
-  // Load async data
+  // Load async data (both with timeout so modal never hangs forever)
   const [histData, matchData] = await Promise.all([
     loadPlayerEloHistory(playerId),
-    db.from('matches').select('*').or(`winner_id.eq.${playerId},loser_id.eq.${playerId}`).order('created_at',{ascending:false}).limit(10)
+    withTimeout(
+      db.from('matches').select('*').or(`winner_id.eq.${playerId},loser_id.eq.${playerId}`).order('created_at',{ascending:false}).limit(10),
+      10000, {data:null}
+    )
   ]);
 
   // Render chart
@@ -840,7 +850,10 @@ async function openProfile(playerId) {
   // H2H vs current user
   if (S.player&&playerId!==S.player.id) {
     const h2hEl=$el('profile-h2h');
-    const {data:h2hData} = await db.from('matches').select('winner_id').or(`and(winner_id.eq.${playerId},loser_id.eq.${S.player.id}),and(winner_id.eq.${S.player.id},loser_id.eq.${playerId})`);
+    const {data:h2hData} = await withTimeout(
+      db.from('matches').select('winner_id').or(`and(winner_id.eq.${playerId},loser_id.eq.${S.player.id}),and(winner_id.eq.${S.player.id},loser_id.eq.${playerId})`),
+      10000, {data:null}
+    );
     const total=(h2hData||[]).length;
     if (!total) {
       h2hEl.innerHTML='<div class="text-muted" style="font-size:.85rem">Noch keine Matches gegeneinander.</div>';
@@ -863,10 +876,13 @@ function closeProfile(e) {
 }
 
 async function loadPlayerEloHistory(playerId) {
-  const {data} = await db.from('matches')
-    .select('winner_id,elo_winner_before,elo_winner_after,elo_loser_before,elo_loser_after,created_at')
-    .or(`winner_id.eq.${playerId},loser_id.eq.${playerId}`)
-    .order('created_at',{ascending:true});
+  const {data} = await withTimeout(
+    db.from('matches')
+      .select('winner_id,elo_winner_before,elo_winner_after,elo_loser_before,elo_loser_after,created_at')
+      .or(`winner_id.eq.${playerId},loser_id.eq.${playerId}`)
+      .order('created_at',{ascending:true}),
+    10000, {data:null}
+  );
   if (!data?.length) return [];
   const pts=[];
   const first=data[0];
@@ -905,7 +921,10 @@ function renderEloChart(pts) {
 async function renderStatsView() {
   $el('month-name').textContent = fmtMonth(new Date());
   const now=new Date(), som=new Date(now.getFullYear(),now.getMonth(),1);
-  const {data:mData} = await db.from('matches').select('winner_id,loser_id,elo_delta,elo_loser_before,elo_loser_after').gte('created_at',som.toISOString());
+  const {data:mData} = await withTimeout(
+    db.from('matches').select('winner_id,loser_id,elo_delta,elo_loser_before,elo_loser_after').gte('created_at',som.toISOString()),
+    10000, {data:null}
+  );
 
   const gains={};
   for (const m of mData||[]) {
@@ -929,7 +948,10 @@ async function renderStatsView() {
   }
 
   // Form list
-  const {data:recent} = await db.from('matches').select('winner_id,loser_id').order('created_at',{ascending:false}).limit(100);
+  const {data:recent} = await withTimeout(
+    db.from('matches').select('winner_id,loser_id').order('created_at',{ascending:false}).limit(100),
+    10000, {data:null}
+  );
   const formEl=$el('form-list');
   formEl.innerHTML='<div style="display:flex;flex-direction:column;gap:.5rem">'+S.players.map(p=>{
     const dots=buildFormDots(p.id,recent||[]);
@@ -954,9 +976,12 @@ async function loadH2HStats() {
   const el=$el('h2h-result'); el.innerHTML='';
   if (!p1id||!p2id||p1id===p2id) return;
   const p1=byId(p1id), p2=byId(p2id);
-  const {data} = await db.from('matches').select('winner_id,sets,created_at')
-    .or(`and(winner_id.eq.${p1id},loser_id.eq.${p2id}),and(winner_id.eq.${p2id},loser_id.eq.${p1id})`)
-    .order('created_at',{ascending:false});
+  const {data} = await withTimeout(
+    db.from('matches').select('winner_id,sets,created_at')
+      .or(`and(winner_id.eq.${p1id},loser_id.eq.${p2id}),and(winner_id.eq.${p2id},loser_id.eq.${p1id})`)
+      .order('created_at',{ascending:false}),
+    10000, {data:null}
+  );
   const matches=data||[];
   if (!matches.length) { el.innerHTML='<div class="text-muted" style="font-size:.85rem">Noch keine Matches zwischen diesen Spielern.</div>'; return; }
   const p1w=matches.filter(m=>m.winner_id===p1id).length, p2w=matches.length-p1w;
@@ -1048,12 +1073,18 @@ async function submitMatch() {
   const elo=calcElo(w.elo,l.elo,w.matches,l.matches);
   const btn=$el('btn-submit-match'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Speichern…';
   try {
-    const {error:me}=await db.from('matches').insert({winner_id:wid,loser_id:lid,sets,elo_winner_before:w.elo,elo_winner_after:elo.wNew,elo_loser_before:l.elo,elo_loser_after:elo.lNew,elo_delta:elo.gain});
-    if(me)throw me;
-    const {error:we}=await db.from('players').update({elo:elo.wNew,wins:w.wins+1,matches:w.matches+1}).eq('id',wid);
-    if(we)throw we;
-    const {error:le}=await db.from('players').update({elo:elo.lNew,losses:l.losses+1,matches:l.matches+1}).eq('id',lid);
-    if(le)throw le;
+    // Single atomic DB call — all 3 writes happen in one transaction, no partial state possible
+    const {error} = await db.rpc('submit_match', {
+      p_winner_id:         wid,
+      p_loser_id:          lid,
+      p_sets:              sets,
+      p_elo_winner_before: w.elo,
+      p_elo_winner_after:  elo.wNew,
+      p_elo_loser_before:  l.elo,
+      p_elo_loser_after:   elo.lNew,
+      p_elo_delta:         elo.gain
+    });
+    if (error) throw error;
     ['s1a','s1b','s2a','s2b','s3a','s3b'].forEach(id=>$el(id).value='');
     ['s1-tag','s2-tag','s3-tag'].forEach(id=>{$el(id).textContent='';$el(id).className='set-tag';});
     $el('set3-row').style.display='none'; $el('match-result-preview').innerHTML='';
@@ -1075,7 +1106,7 @@ async function loadHistory() {
   const filt=$el('history-filter').value;
   let q=db.from('matches').select('*').order('created_at',{ascending:false}).limit(60);
   if(filt) q=q.or(`winner_id.eq.${filt},loser_id.eq.${filt}`);
-  const {data,error}=await q;
+  const {data,error}=await withTimeout(q, 10000, {data:null,error:{message:'Zeitüberschreitung — bitte erneut versuchen.'}});
   if(error){el.innerHTML=`<div class="alert alert-error">Fehler: ${error.message}</div>`;return;}
   if(!data?.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">🏓</div><p>Noch keine Matches.</p></div>';return;}
   el.innerHTML=data.map(m=>{
