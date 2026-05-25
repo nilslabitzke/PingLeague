@@ -541,7 +541,7 @@ function calcElo(wElo, lElo, wM, lM) {
 
 function eloToLevel(elo) {
   const raw = 0.5 + (elo - 1000) / 1000 * 6.5;
-  return Math.max(0.5, Math.min(7.0, Math.round(raw * 2) / 2));
+  return Math.max(0.5, Math.min(7.0, Math.round(raw * 10) / 10));
 }
 function levelColor(lvl) {
   if (lvl >= 6.0) return 'var(--diamond)';
