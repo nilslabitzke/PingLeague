@@ -560,7 +560,9 @@
       </div>
       <div class="form-group">
         <label>Spieler auswählen</label>
-        <div id="ct-players" style="display:flex;flex-direction:column;gap:.1rem;max-height:240px;overflow-y:auto;background:var(--surface);border-radius:var(--radius-sm);padding:.5rem"></div>
+        <div id="ct-selected-chips" style="display:flex;flex-wrap:wrap;gap:.35rem;min-height:1rem;margin-bottom:.5rem"></div>
+        <input type="text" id="ct-search" placeholder="Name oder E-Mail suchen…" oninput="filterCtPlayers()" autocomplete="off" style="margin-bottom:.35rem">
+        <div id="ct-results" style="max-height:200px;overflow-y:auto;background:var(--surface);border-radius:var(--radius-sm)"></div>
       </div>
       <button class="btn btn-primary btn-full" id="btn-create-tournament" onclick="createTournament()">Turnier erstellen</button>
     </div>
@@ -1720,7 +1722,10 @@ function renderTournamentContent() {
       <div style="font-size:.8rem;color:var(--text-muted);margin-top:.15rem">${phaseLabel[t.status]||t.status}</div>
       ${winner?`<div style="font-size:.88rem;font-weight:700;color:var(--gold);margin-top:.3rem">🏆 Sieger: ${esc(winner.name)}</div>`:''}
     </div>
-    <button onclick="closeTournamentDetail()" style="background:none;border:none;color:var(--text-muted);font-size:1.5rem;cursor:pointer;line-height:1;flex-shrink:0">✕</button>
+    <div style="display:flex;gap:.4rem;align-items:center;flex-shrink:0">
+      ${S.isAdmin?`<button onclick="deleteTournament('${t.id}','${esc(t.name)}')" class="btn btn-danger btn-sm" style="font-size:.72rem;padding:.3rem .6rem" title="Turnier löschen">🗑</button>`:''}
+      <button onclick="closeTournamentDetail()" style="background:none;border:none;color:var(--text-muted);font-size:1.5rem;cursor:pointer;line-height:1">✕</button>
+    </div>
   </div>`;
 
   // Group tables
@@ -1886,21 +1891,63 @@ async function submitTournamentResult() {
   if ($el('view-profile').classList.contains('active')) renderProfileView();
 }
 
+let _ctSelected = []; // array of player IDs
+
 function openCreateTournament() {
   $el('ct-name').value = '';
   $el('ct-groups').value = '2';
   $el('ct-alert').innerHTML = '';
-  const el = $el('ct-players');
-  el.innerHTML = S.players.map(p => {
-    const lvl=eloToLevel(p.elo), col=levelColor(lvl);
-    return `<label style="display:flex;align-items:center;gap:.6rem;padding:.35rem .2rem;cursor:pointer">
-      <input type="checkbox" value="${p.id}" ${p.id===S.player?.id?'checked':''}>
-      <span style="flex:1;font-size:.88rem">${esc(p.name)}</span>
-      <span class="level-badge" style="color:${col};background:${col}18;font-size:.7rem">${lvl.toFixed(1)}</span>
-    </label>`;
-  }).join('');
+  $el('ct-search').value = '';
+  // Pre-select self
+  _ctSelected = S.player ? [S.player.id] : [];
+  renderCtSelected();
+  filterCtPlayers();
   $el('create-tournament-overlay').classList.add('open');
   document.body.style.overflow = 'hidden';
+}
+
+function renderCtSelected() {
+  const el = $el('ct-selected-chips');
+  if (!_ctSelected.length) { el.innerHTML = '<span style="font-size:.78rem;color:var(--text-dim)">Noch keine Spieler gewählt…</span>'; return; }
+  el.innerHTML = _ctSelected.map(id => {
+    const p = byId(id);
+    return `<span style="display:inline-flex;align-items:center;gap:.3rem;background:var(--primary)22;color:var(--primary-lt);border-radius:999px;padding:.2rem .55rem;font-size:.78rem;font-weight:600">
+      ${p?esc(p.name):'?'}
+      <button onclick="removeCtPlayer('${id}')" style="background:none;border:none;color:inherit;cursor:pointer;line-height:1;font-size:.9rem;padding:0">×</button>
+    </span>`;
+  }).join('');
+}
+
+function filterCtPlayers() {
+  const q = ($el('ct-search').value||'').trim().toLowerCase();
+  const el = $el('ct-results');
+  const results = S.players.filter(p =>
+    !_ctSelected.includes(p.id) &&
+    (p.name.toLowerCase().includes(q) || (p.email||'').toLowerCase().includes(q))
+  ).slice(0, 8);
+  if (!results.length && !q) { el.innerHTML = ''; return; }
+  if (!results.length) { el.innerHTML = '<div class="text-muted" style="font-size:.82rem;padding:.4rem .5rem">Kein Spieler gefunden.</div>'; return; }
+  el.innerHTML = results.map(p => {
+    const lvl=eloToLevel(p.elo), col=levelColor(lvl);
+    return `<div style="display:flex;align-items:center;gap:.6rem;padding:.4rem .5rem;cursor:pointer;border-radius:var(--radius-sm);transition:background .15s" onmouseenter="this.style.background='var(--card-hover)'" onmouseleave="this.style.background=''" onclick="addCtPlayer('${p.id}')">
+      <span style="flex:1;font-size:.88rem">${esc(p.name)}${p.email?`<span style="font-size:.72rem;color:var(--text-dim);margin-left:.35rem">${esc(p.email)}</span>`:''}</span>
+      <span class="level-badge" style="color:${col};background:${col}18;font-size:.7rem">${lvl.toFixed(1)}</span>
+      <span style="font-size:.9rem;color:var(--success)">＋</span>
+    </div>`;
+  }).join('');
+}
+
+function addCtPlayer(id) {
+  if (!_ctSelected.includes(id)) _ctSelected.push(id);
+  $el('ct-search').value = '';
+  renderCtSelected();
+  filterCtPlayers();
+}
+
+function removeCtPlayer(id) {
+  _ctSelected = _ctSelected.filter(x => x !== id);
+  renderCtSelected();
+  filterCtPlayers();
 }
 
 function closeCreateTournament(e) {
@@ -1909,10 +1956,20 @@ function closeCreateTournament(e) {
   document.body.style.overflow = '';
 }
 
+async function deleteTournament(tid, name) {
+  if (!confirm(`Turnier "${name}" wirklich löschen? Alle Spiele und Ergebnisse gehen verloren.`)) return;
+  const { error } = await db.rpc('delete_tournament', { p_tid: tid });
+  if (error) { toast(`Fehler: ${error.message}`, 'error'); return; }
+  toast(`Turnier "${name}" gelöscht.`, 'info');
+  closeTournamentDetail();
+  await loadTournaments();
+  renderTournamentsSection();
+}
+
 async function createTournament() {
   const name = $el('ct-name').value.trim();
   const numGroups = parseInt($el('ct-groups').value);
-  const pids = Array.from($el('ct-players').querySelectorAll('input[type=checkbox]:checked')).map(cb=>cb.value);
+  const pids = [..._ctSelected];
   const al = $el('ct-alert');
   al.innerHTML = '';
   if (!name) { al.innerHTML='<div class="alert alert-error">Bitte einen Namen eingeben.</div>'; return; }
