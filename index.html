@@ -253,6 +253,24 @@
     /* CHALLENGES */
     .ch-badge { display:inline-flex; align-items:center; justify-content:center; background:var(--error); color:#fff; font-size:.58rem; font-weight:800; min-width:14px; height:14px; border-radius:999px; padding:0 3px; margin-left:3px; vertical-align:middle; line-height:1; }
     .ch-badge:empty { display:none; }
+    /* Sub-tabs (within a view) */
+    .sub-tabs { display:flex; gap:.4rem; margin-bottom:1.25rem; background:var(--surface); padding:.3rem; border-radius:var(--radius); }
+    .sub-tab { flex:1; padding:.45rem .6rem; border:none; border-radius:calc(var(--radius) - 3px); background:none; color:var(--text-muted); font-size:.82rem; font-weight:600; cursor:pointer; transition:all .2s; }
+    .sub-tab.active { background:var(--card); color:var(--text); }
+    .sub-content { display:none; }
+    .sub-content.active { display:block; }
+    /* Tournament overlay */
+    .tournament-overlay { display:none; position:fixed; inset:0; z-index:300; background:var(--bg); overflow-y:auto; padding:1rem; }
+    .tournament-overlay.open { display:block; }
+    .tournament-inner { max-width:640px; margin:0 auto; padding-bottom:3rem; }
+    /* Result entry overlay */
+    .tr-overlay { display:none; position:fixed; inset:0; z-index:400; background:#0009; display:flex; align-items:center; justify-content:center; padding:1rem; }
+    .tr-overlay.open { display:flex; }
+    .tr-sheet { background:var(--card); border-radius:var(--radius); padding:1.5rem; width:100%; max-width:360px; }
+    .tr-score-row { display:flex; align-items:center; gap:.75rem; margin:.75rem 0; }
+    .tr-name { flex:1; font-size:.88rem; font-weight:600; text-align:center; }
+    .tr-colon { font-size:1.2rem; font-weight:800; color:var(--text-muted); }
+    .tr-score-input { width:64px; text-align:center; font-size:1.4rem; font-weight:800; }
     .challenge-card { display:flex; align-items:center; gap:.75rem; padding:.75rem; background:var(--surface); border-radius:var(--radius-sm); margin-bottom:.5rem; }
     .challenge-avatar { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.85rem; font-weight:800; flex-shrink:0; }
     .challenge-info { flex:1; min-width:0; }
@@ -448,26 +466,44 @@
 
     <!-- CHALLENGES -->
     <div id="view-challenges" class="view">
-      <div class="view-header"><h2>Herausforderungen</h2><p>Fordere Mitspieler zum Match heraus</p></div>
-      <div style="display:flex;flex-direction:column;gap:1.25rem">
-        <div class="card" id="pending-matches-card" style="display:none">
-          <div class="card-title">⏳ Ausstehende Matches <span id="pm-badge" class="ch-badge" style="position:static;margin-left:.4rem;vertical-align:middle"></span></div>
-          <div id="pending-matches-list"><div class="text-muted" style="font-size:.85rem">Keine ausstehenden Matches.</div></div>
-        </div>
-        <div class="card">
-          <div class="card-title">🔍 Spieler herausfordern</div>
-          <div class="form-group" style="margin-bottom:.5rem">
-            <input type="text" id="challenge-search" placeholder="Name oder E-Mail…" oninput="filterChallengeSearch()" autocomplete="off">
+      <div class="sub-tabs">
+        <button class="sub-tab active" onclick="showChallengesSubTab('challenges')">⚔️ Challenges</button>
+        <button class="sub-tab" id="sub-tab-tournaments" onclick="showChallengesSubTab('tournaments')">🏆 Turniere</button>
+      </div>
+
+      <!-- CHALLENGES SUB -->
+      <div id="sub-challenges" class="sub-content active">
+        <div style="display:flex;flex-direction:column;gap:1.25rem">
+          <div class="card" id="pending-matches-card" style="display:none">
+            <div class="card-title">⏳ Ausstehende Matches <span id="pm-badge" class="ch-badge" style="position:static;margin-left:.4rem;vertical-align:middle"></span></div>
+            <div id="pending-matches-list"><div class="text-muted" style="font-size:.85rem">Keine ausstehenden Matches.</div></div>
           </div>
-          <div id="challenge-search-results"></div>
+          <div class="card">
+            <div class="card-title">🔍 Spieler herausfordern</div>
+            <div class="form-group" style="margin-bottom:.5rem">
+              <input type="text" id="challenge-search" placeholder="Name oder E-Mail…" oninput="filterChallengeSearch()" autocomplete="off">
+            </div>
+            <div id="challenge-search-results"></div>
+          </div>
+          <div class="card">
+            <div class="card-title">📥 Eingehend</div>
+            <div id="challenges-incoming"><div class="text-muted" style="font-size:.85rem">Keine Herausforderungen.</div></div>
+          </div>
+          <div class="card">
+            <div class="card-title">📤 Gesendet</div>
+            <div id="challenges-outgoing"><div class="text-muted" style="font-size:.85rem">Keine gesendeten Herausforderungen.</div></div>
+          </div>
         </div>
+      </div>
+
+      <!-- TOURNAMENTS SUB -->
+      <div id="sub-tournaments" class="sub-content">
         <div class="card">
-          <div class="card-title">📥 Eingehend</div>
-          <div id="challenges-incoming"><div class="text-muted" style="font-size:.85rem">Keine Herausforderungen.</div></div>
-        </div>
-        <div class="card">
-          <div class="card-title">📤 Gesendet</div>
-          <div id="challenges-outgoing"><div class="text-muted" style="font-size:.85rem">Keine gesendeten Herausforderungen.</div></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem">
+            <div class="card-title" style="margin-bottom:0">🏆 Turniere</div>
+            <button class="btn btn-primary btn-sm" onclick="openCreateTournament()">+ Neues Turnier</button>
+          </div>
+          <div id="tournaments-list"><div class="text-muted" style="font-size:.85rem">Lade…</div></div>
         </div>
       </div>
     </div>
@@ -493,6 +529,63 @@
       </div>
     </div>
   </main>
+</div>
+
+<!-- TOURNAMENT DETAIL OVERLAY -->
+<div class="tournament-overlay" id="tournament-overlay">
+  <div class="tournament-inner">
+    <div id="tournament-content"><div class="empty-state"><div class="empty-icon">⏳</div><p>Lade…</p></div></div>
+  </div>
+</div>
+
+<!-- CREATE TOURNAMENT OVERLAY -->
+<div class="profile-overlay" id="create-tournament-overlay" onclick="closeCreateTournament(event)">
+  <div class="profile-sheet" style="max-height:90vh;overflow-y:auto">
+    <div class="profile-handle"></div>
+    <div style="padding:1.25rem 1.5rem">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
+        <div style="font-size:1.05rem;font-weight:800">🏆 Neues Turnier</div>
+        <button onclick="closeCreateTournament()" style="background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer">✕</button>
+      </div>
+      <div id="ct-alert"></div>
+      <div class="form-group"><label>Name des Turniers</label><input type="text" id="ct-name" placeholder="z.B. Büro-Cup 2025" autocomplete="off"></div>
+      <div class="form-group">
+        <label>Anzahl Gruppen</label>
+        <select id="ct-groups">
+          <option value="1">1 Gruppe → Finale</option>
+          <option value="2" selected>2 Gruppen → Halbfinale + Finale</option>
+          <option value="3">3 Gruppen → Halbfinale + Finale</option>
+          <option value="4">4 Gruppen → Viertelfinale + Halbfinale + Finale</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Spieler auswählen</label>
+        <div id="ct-players" style="display:flex;flex-direction:column;gap:.1rem;max-height:240px;overflow-y:auto;background:var(--surface);border-radius:var(--radius-sm);padding:.5rem"></div>
+      </div>
+      <button class="btn btn-primary btn-full" id="btn-create-tournament" onclick="createTournament()">Turnier erstellen</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOURNAMENT RESULT ENTRY OVERLAY -->
+<div class="tr-overlay" id="tournament-result-overlay" onclick="if(event.target===this)closeTournamentResult()">
+  <div class="tr-sheet">
+    <div style="font-size:.9rem;font-weight:700;text-align:center;margin-bottom:.25rem">Ergebnis eintragen</div>
+    <div style="font-size:.75rem;color:var(--text-muted);text-align:center;margin-bottom:.75rem">Spiel bis 11 · kein Unentschieden</div>
+    <div id="tr-alert"></div>
+    <input type="hidden" id="tr-match-id">
+    <div class="tr-score-row">
+      <div class="tr-name" id="tr-p1-name">Spieler 1</div>
+      <input type="number" class="tr-score-input" id="tr-score1" min="0" max="20" placeholder="0">
+      <div class="tr-colon">:</div>
+      <input type="number" class="tr-score-input" id="tr-score2" min="0" max="20" placeholder="0">
+      <div class="tr-name" id="tr-p2-name">Spieler 2</div>
+    </div>
+    <div style="display:flex;gap:.5rem;margin-top:1rem">
+      <button class="btn btn-secondary btn-full" onclick="closeTournamentResult()">Abbrechen</button>
+      <button class="btn btn-success btn-full" id="btn-submit-tr" onclick="submitTournamentResult()">Speichern</button>
+    </div>
+  </div>
 </div>
 
 <!-- PROFILE MODAL -->
@@ -547,7 +640,7 @@ const SUPABASE_URL = 'https://xsxsyfaxhwrbllvvfxxm.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzeHN5ZmF4aHdyYmxsdnZmeHhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MTM1NzIsImV4cCI6MjA5NTE4OTU3Mn0.y35dDJTrkCNMU7P0V4H8iSMprITdRst9kl7B5_BMvc8';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storage:window.localStorage } });
 
-let S = { user:null, player:null, isAdmin:false, players:[], challenges:[], pendingMatches:[], settings:{ k_high:32, k_low:16 } };
+let S = { user:null, player:null, isAdmin:false, players:[], challenges:[], pendingMatches:[], tournaments:[], currentTournament:null, settings:{ k_high:32, k_low:16 } };
 
 // ── ELO & LEVEL ──────────────────────────────────────────────────────────
 function expected(ra, rb) { return 1 / (1 + Math.pow(10, (rb - ra) / 400)); }
@@ -1558,6 +1651,285 @@ function renderChallengesView() {
   filterChallengeSearch();
 }
 
+// ── TOURNAMENTS ───────────────────────────────────────────────────────────
+
+function showChallengesSubTab(tab) {
+  ['challenges','tournaments'].forEach(t => {
+    $el(`sub-${t}`).classList.toggle('active', t === tab);
+  });
+  document.querySelectorAll('.sub-tab').forEach((btn, i) => {
+    btn.classList.toggle('active', (i===0&&tab==='challenges')||(i===1&&tab==='tournaments'));
+  });
+  if (tab === 'tournaments') renderTournamentsSection();
+}
+
+async function loadTournaments() {
+  const { data } = await withTimeout(
+    db.from('tournaments').select('*').order('created_at', { ascending: false }),
+    8000, { data: null }
+  );
+  S.tournaments = data || [];
+}
+
+function renderTournamentsSection() {
+  const el = $el('tournaments-list');
+  if (!el) return;
+  if (!S.tournaments.length) {
+    el.innerHTML = '<div class="text-muted" style="font-size:.85rem">Noch keine Turniere. Erstelle das erste!</div>';
+    return;
+  }
+  const statusLabel = { group_stage:'Gruppenphase', awaiting_ko:'⚡ K.O. bereit', knockout:'K.O.-Runde', finished:'Beendet' };
+  el.innerHTML = S.tournaments.map(t => {
+    const winner = t.winner_id ? byId(t.winner_id) : null;
+    const sl = statusLabel[t.status] || t.status;
+    const isDone = t.status === 'finished';
+    return `<div class="challenge-card" style="cursor:pointer" onclick="openTournamentDetail('${t.id}')">
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:700;font-size:.9rem">${esc(t.name)}</div>
+        <div style="font-size:.74rem;color:var(--text-muted)">${sl} · ${t.num_groups} Gruppe${t.num_groups!==1?'n':''} ${winner?'· 🏆 '+esc(winner.name):''}</div>
+      </div>
+      <span style="font-size:.7rem;color:var(--text-dim);flex-shrink:0">${fmtAgo(t.created_at)}</span>
+    </div>`;
+  }).join('');
+}
+
+async function openTournamentDetail(tid) {
+  const overlay = $el('tournament-overlay');
+  const content = $el('tournament-content');
+  content.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade…</p></div>';
+  overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  const [tRes, tpRes, tmRes] = await Promise.all([
+    withTimeout(db.from('tournaments').select('*').eq('id', tid).single(), 8000, {data:null}),
+    withTimeout(db.from('tournament_players').select('*').eq('tournament_id', tid), 8000, {data:null}),
+    withTimeout(db.from('tournament_matches').select('*').eq('tournament_id', tid).order('created_at'), 8000, {data:null})
+  ]);
+  const t = tRes?.data, tp = tpRes?.data||[], tm = tmRes?.data||[];
+  if (!t) { content.innerHTML = '<div class="text-muted">Turnier nicht gefunden.</div>'; return; }
+  S.currentTournament = { t, tp, tm };
+  renderTournamentContent();
+}
+
+function renderTournamentContent() {
+  const { t, tp, tm } = S.currentTournament;
+  const phaseLabel = { group_stage:'📋 Gruppenphase', awaiting_ko:'⚡ Gruppenphase abgeschlossen', knockout:'🥊 K.O.-Runde', finished:'🏁 Beendet' };
+  const winner = t.winner_id ? byId(t.winner_id) : null;
+  let html = `<div style="display:flex;align-items:flex-start;gap:.75rem;margin-bottom:1.25rem">
+    <div style="flex:1">
+      <div style="font-size:1.15rem;font-weight:800">${esc(t.name)}</div>
+      <div style="font-size:.8rem;color:var(--text-muted);margin-top:.15rem">${phaseLabel[t.status]||t.status}</div>
+      ${winner?`<div style="font-size:.88rem;font-weight:700;color:var(--gold);margin-top:.3rem">🏆 Sieger: ${esc(winner.name)}</div>`:''}
+    </div>
+    <button onclick="closeTournamentDetail()" style="background:none;border:none;color:var(--text-muted);font-size:1.5rem;cursor:pointer;line-height:1;flex-shrink:0">✕</button>
+  </div>`;
+
+  // Group tables
+  for (let g = 1; g <= t.num_groups; g++) {
+    const standings = calcGroupStandings(tp, tm, g);
+    const gMatches = tm.filter(m => m.phase==='group' && m.group_num===g);
+    html += `<div class="card" style="margin-bottom:1rem">
+      <div class="card-title">Gruppe ${g}</div>
+      <table style="width:100%;font-size:.82rem;border-collapse:collapse;margin-bottom:.85rem">
+        <thead><tr>
+          <th style="text-align:left;padding:.25rem .35rem;color:var(--text-muted);font-weight:600">Spieler</th>
+          <th style="text-align:center;padding:.25rem .35rem;color:var(--success);font-weight:600">S</th>
+          <th style="text-align:center;padding:.25rem .35rem;color:var(--error);font-weight:600">N</th>
+          <th style="text-align:center;padding:.25rem .35rem;color:var(--text-muted);font-weight:600">±</th>
+        </tr></thead>
+        <tbody>${standings.map((row,i) => {
+          const p = byId(row.player_id);
+          const adv = i < 2 && t.num_groups > 1;
+          return `<tr style="border-top:1px solid var(--border)">
+            <td style="padding:.3rem .35rem;${adv?'color:var(--success)':''}">${adv?'↑ ':''}${p?esc(p.name):'?'}</td>
+            <td style="text-align:center;padding:.3rem .35rem;font-weight:700;color:var(--success)">${row.wins}</td>
+            <td style="text-align:center;padding:.3rem .35rem;font-weight:700;color:var(--error)">${row.losses}</td>
+            <td style="text-align:center;padding:.3rem .35rem;font-size:.78rem">${row.pf-row.pa>=0?'+':''}${row.pf-row.pa}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+      <div style="font-size:.75rem;font-weight:700;color:var(--text-muted);margin-bottom:.4rem;text-transform:uppercase;letter-spacing:.04em">Spiele</div>
+      ${gMatches.map(m => {
+        const p1=byId(m.player1_id), p2=byId(m.player2_id), done=m.winner_id!==null;
+        const canEnter = !done && p1 && p2 && (S.isAdmin || m.player1_id===S.player?.id || m.player2_id===S.player?.id);
+        const leg = m.is_return_match ? '<span style="font-size:.65rem;color:var(--text-dim)">↩</span>' : '';
+        return `<div style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;border-bottom:1px solid var(--border)">
+          ${leg}
+          <span style="flex:1;font-size:.8rem;${m.winner_id===m.player1_id?'font-weight:700':''}">${p1?esc(p1.name):'?'}</span>
+          ${done?`<span style="font-size:.88rem;font-weight:800;color:var(--text)">${m.score1}:${m.score2}</span>`
+                :`<span style="font-size:.75rem;color:var(--text-dim)">vs</span>`}
+          <span style="flex:1;text-align:right;font-size:.8rem;${m.winner_id===m.player2_id?'font-weight:700':''}">${p2?esc(p2.name):'?'}</span>
+          ${canEnter?`<button class="btn btn-primary btn-sm" style="font-size:.7rem;padding:.2rem .5rem;flex-shrink:0" onclick="openEnterTournamentResult('${m.id}')">Eintragen</button>`:''}
+        </div>`;
+      }).join('')}
+    </div>`;
+  }
+
+  // Awaiting K.O.
+  if (t.status === 'awaiting_ko') {
+    html += `<div class="card" style="text-align:center;padding:1.5rem 1rem">
+      <div style="font-size:1.1rem;margin-bottom:.5rem">⚡ Alle Gruppenspiele sind gespielt!</div>
+      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem">Jetzt die K.O.-Runde generieren und die Halbfinalisten auslosen.</p>
+      <button class="btn btn-primary" onclick="generateKOBracket('${t.id}')">🏆 K.O.-Runde starten</button>
+    </div>`;
+  }
+
+  // K.O. bracket
+  if (t.status === 'knockout' || t.status === 'finished') {
+    const koPhaseOrder = ['quarterfinal','semifinal','final'];
+    const koLabel = { quarterfinal:'Viertelfinale', semifinal:'Halbfinale', final:'Finale 🏆' };
+    koPhaseOrder.forEach(phase => {
+      const pm = tm.filter(m => m.phase===phase);
+      if (!pm.length) return;
+      html += `<div class="card" style="margin-bottom:1rem">
+        <div class="card-title">${koLabel[phase]}</div>
+        ${pm.map(m => {
+          const p1=byId(m.player1_id), p2=byId(m.player2_id), done=m.winner_id!==null;
+          const canEnter = !done && p1 && p2 && (S.isAdmin || m.player1_id===S.player?.id || m.player2_id===S.player?.id);
+          return `<div style="display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--border)">
+            <span style="flex:1;font-size:.88rem;${m.winner_id===m.player1_id?'font-weight:800':''}">${p1?esc(p1.name):'TBD'}</span>
+            ${done?`<span style="font-size:1rem;font-weight:800">${m.score1}:${m.score2}</span>`
+                  :`<span style="font-size:.82rem;color:var(--text-dim)">vs</span>`}
+            <span style="flex:1;text-align:right;font-size:.88rem;${m.winner_id===m.player2_id?'font-weight:800':''}">${p2?esc(p2.name):'TBD'}</span>
+            ${canEnter?`<button class="btn btn-primary btn-sm" style="font-size:.7rem;padding:.2rem .5rem;flex-shrink:0" onclick="openEnterTournamentResult('${m.id}')">Eintragen</button>`:''}
+          </div>`;
+        }).join('')}
+      </div>`;
+    });
+  }
+
+  $el('tournament-content').innerHTML = html;
+}
+
+function calcGroupStandings(tp, tm, groupNum) {
+  const gp = tp.filter(p => p.group_num === groupNum);
+  const gm = tm.filter(m => m.phase==='group' && m.group_num===groupNum && m.winner_id);
+  const stats = {};
+  gp.forEach(p => { stats[p.player_id] = { player_id:p.player_id, wins:0, losses:0, pf:0, pa:0 }; });
+  gm.forEach(m => {
+    if (!stats[m.player1_id]||!stats[m.player2_id]) return;
+    if (m.winner_id===m.player1_id) { stats[m.player1_id].wins++; stats[m.player2_id].losses++; }
+    else { stats[m.player2_id].wins++; stats[m.player1_id].losses++; }
+    stats[m.player1_id].pf += m.score1||0; stats[m.player1_id].pa += m.score2||0;
+    stats[m.player2_id].pf += m.score2||0; stats[m.player2_id].pa += m.score1||0;
+  });
+  return Object.values(stats).sort((a,b) => b.wins-a.wins || (b.pf-b.pa)-(a.pf-a.pa));
+}
+
+async function generateKOBracket(tid) {
+  const { t, tp, tm } = S.currentTournament;
+  // Build slots: for each group, top 2 by standings (1st, 2nd, 1st, 2nd ...)
+  // For 3 groups: take winner of each group + best runner-up → 4 slots
+  const slots = [];
+  const allRunnerUps = [];
+  for (let g = 1; g <= t.num_groups; g++) {
+    const s = calcGroupStandings(tp, tm, g);
+    slots.push(...[s[0]?.player_id, s[1]?.player_id].filter(Boolean));
+    if (t.num_groups === 3 && s[1]) allRunnerUps.push({ pid: s[1].player_id, diff: (s[1].pf||0)-(s[1].pa||0) });
+  }
+  let finalSlots = slots;
+  // For 3 groups: take 3 group winners + best runner-up → 4 slots
+  if (t.num_groups === 3) {
+    const winners = []; const runners = [];
+    for (let g = 1; g <= 3; g++) {
+      const s = calcGroupStandings(tp, tm, g);
+      winners.push(s[0]?.player_id);
+      if (s[1]) runners.push({ pid: s[1].player_id, diff:(s[1].pf||0)-(s[1].pa||0) });
+    }
+    runners.sort((a,b) => b.diff-a.diff);
+    finalSlots = [...winners.filter(Boolean), runners[0]?.pid].filter(Boolean);
+  }
+  const { error } = await db.rpc('generate_tournament_ko', { p_tid: tid, p_slots: finalSlots });
+  if (error) { toast(`Fehler: ${error.message}`, 'error'); return; }
+  toast('K.O.-Runde gestartet! 🏆', 'success');
+  await openTournamentDetail(tid);
+}
+
+function closeTournamentDetail() {
+  $el('tournament-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  S.currentTournament = null;
+}
+
+function openEnterTournamentResult(matchId) {
+  const m = S.currentTournament?.tm.find(x => x.id === matchId);
+  $el('tr-match-id').value = matchId;
+  $el('tr-score1').value = ''; $el('tr-score2').value = '';
+  $el('tr-alert').innerHTML = '';
+  if (m) {
+    const p1=byId(m.player1_id), p2=byId(m.player2_id);
+    $el('tr-p1-name').textContent = p1?.name||'?';
+    $el('tr-p2-name').textContent = p2?.name||'?';
+  }
+  $el('tournament-result-overlay').classList.add('open');
+}
+
+function closeTournamentResult() {
+  $el('tournament-result-overlay').classList.remove('open');
+}
+
+async function submitTournamentResult() {
+  const matchId = $el('tr-match-id').value;
+  const s1 = parseInt($el('tr-score1').value), s2 = parseInt($el('tr-score2').value);
+  const al = $el('tr-alert');
+  al.innerHTML = '';
+  if (isNaN(s1)||isNaN(s2)||s1<0||s2<0) { al.innerHTML='<div class="alert alert-error">Bitte gültige Werte.</div>'; return; }
+  if (s1===s2) { al.innerHTML='<div class="alert alert-error">Kein Unentschieden möglich.</div>'; return; }
+  const btn=$el('btn-submit-tr'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Speichern…';
+  const { error } = await db.rpc('submit_tournament_match', { p_match_id:matchId, p_score1:s1, p_score2:s2 });
+  btn.disabled=false; btn.innerHTML='Speichern';
+  if (error) { al.innerHTML=`<div class="alert alert-error">${error.message}</div>`; return; }
+  closeTournamentResult();
+  toast('Ergebnis gespeichert ✓', 'success');
+  await Promise.all([loadPlayers(), openTournamentDetail(S.currentTournament.t.id)]);
+  renderRanking();
+  if(S.player) S.player = byId(S.player.id)||S.player;
+  if ($el('view-profile').classList.contains('active')) renderProfileView();
+}
+
+function openCreateTournament() {
+  $el('ct-name').value = '';
+  $el('ct-groups').value = '2';
+  $el('ct-alert').innerHTML = '';
+  const el = $el('ct-players');
+  el.innerHTML = S.players.map(p => {
+    const lvl=eloToLevel(p.elo), col=levelColor(lvl);
+    return `<label style="display:flex;align-items:center;gap:.6rem;padding:.35rem .2rem;cursor:pointer">
+      <input type="checkbox" value="${p.id}" ${p.id===S.player?.id?'checked':''}>
+      <span style="flex:1;font-size:.88rem">${esc(p.name)}</span>
+      <span class="level-badge" style="color:${col};background:${col}18;font-size:.7rem">${lvl.toFixed(1)}</span>
+    </label>`;
+  }).join('');
+  $el('create-tournament-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeCreateTournament(e) {
+  if (e && e.target !== $el('create-tournament-overlay')) return;
+  $el('create-tournament-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+async function createTournament() {
+  const name = $el('ct-name').value.trim();
+  const numGroups = parseInt($el('ct-groups').value);
+  const pids = Array.from($el('ct-players').querySelectorAll('input[type=checkbox]:checked')).map(cb=>cb.value);
+  const al = $el('ct-alert');
+  al.innerHTML = '';
+  if (!name) { al.innerHTML='<div class="alert alert-error">Bitte einen Namen eingeben.</div>'; return; }
+  if (pids.length < 2) { al.innerHTML='<div class="alert alert-error">Mindestens 2 Spieler erforderlich.</div>'; return; }
+  if (pids.length < numGroups*2) { al.innerHTML=`<div class="alert alert-error">Zu wenige Spieler für ${numGroups} Gruppen (mind. ${numGroups*2} nötig).</div>`; return; }
+  const btn=$el('btn-create-tournament'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Erstellen…';
+  const { data, error } = await db.rpc('create_tournament', { p_name:name, p_player_ids:pids, p_num_groups:numGroups });
+  btn.disabled=false; btn.innerHTML='Turnier erstellen';
+  if (error) { al.innerHTML=`<div class="alert alert-error">${error.message}</div>`; return; }
+  $el('create-tournament-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  toast(`Turnier "${name}" erstellt! 🏓`, 'success');
+  await loadTournaments();
+  renderTournamentsSection();
+  openTournamentDetail(data);
+}
+
 // ── NAVIGATION ────────────────────────────────────────────────────────────
 function showView(id) {
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -1568,9 +1940,10 @@ function showView(id) {
   else if(id==='ranking'){loadPlayers().then(renderRanking);}
   else if(id==='admin'){renderAdminPlayers();}
   else if(id==='challenges'){
-    Promise.all([loadChallenges(), loadPendingMatches()]).then(()=>{
+    Promise.all([loadChallenges(), loadPendingMatches(), loadTournaments()]).then(()=>{
       renderChallengesView();
       renderPendingMatchesSection();
+      renderTournamentsSection();
     });
   }
 }
