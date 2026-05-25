@@ -364,7 +364,14 @@
   <main>
     <!-- RANKING -->
     <div id="view-ranking" class="view active">
-      <div class="view-header"><h2>Rangliste</h2><p>Elo-Bewertungen · Level 0.5–7.0</p><p id="ranking-last-updated" style="font-size:.76rem;color:var(--text-dim);margin-top:.15rem"></p></div>
+      <div class="view-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem">
+        <div>
+          <h2>Rangliste</h2>
+          <p>Elo-Bewertungen · Level 0.5–7.0</p>
+          <p id="ranking-last-updated" style="font-size:.76rem;color:var(--text-dim);margin-top:.15rem"></p>
+        </div>
+        <button id="btn-manual-refresh" onclick="manualRefresh()" style="display:none;flex-shrink:0;margin-top:.25rem" class="btn btn-secondary btn-sm">↻ Jetzt aktualisieren</button>
+      </div>
       <div id="month-banner-wrap"></div>
       <div class="ranking-table-wrapper">
         <table>
@@ -726,6 +733,22 @@ function applyPlayerData(pd, user) {
   $el('header-user-club').textContent = pd?.club || '';
   $el('admin-nav').style.display = S.isAdmin ? '' : 'none';
   $el('bottom-admin-btn').style.display = S.isAdmin ? '' : 'none';
+  $el('btn-manual-refresh').style.display = S.isAdmin ? '' : 'none';
+}
+
+async function manualRefresh() {
+  const btn = $el('btn-manual-refresh');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Aktualisiere…';
+  const ok = await loadPlayers();
+  btn.disabled = false;
+  btn.innerHTML = '↻ Jetzt aktualisieren';
+  if (ok) {
+    renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
+    toast('Rangliste aktualisiert ✓', 'success');
+  } else {
+    toast('Aktualisierung fehlgeschlagen', 'error');
+  }
 }
 
 async function setupUser(user) {
