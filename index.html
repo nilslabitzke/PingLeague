@@ -499,6 +499,10 @@
         <input type="text" id="settings-email" readonly style="opacity:.45;cursor:default">
       </div>
       <button class="btn btn-primary btn-full" id="btn-settings-save" onclick="saveProfileSettings()">Speichern</button>
+      <div style="margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border)">
+        <button class="btn btn-secondary btn-full" onclick="obStartRecalculate()">↺ Elo neu einschätzen</button>
+        <p style="font-size:.75rem;color:var(--text-dim);margin-top:.5rem;text-align:center">Beantworte die 4 Fragen erneut, um dein Elo neu zu berechnen.</p>
+      </div>
     </div>
   </div>
 </div>
@@ -1244,7 +1248,8 @@ function showView(id) {
 const OB = {
   step: 0,
   answers: [],
-  pendingUser: null  // {id, name, club}
+  pendingUser: null,  // {id, name, club}
+  mode: 'new'         // 'new' | 'recalculate'
 };
 
 const OB_QUESTIONS = [
@@ -1292,7 +1297,16 @@ function obCalcElo() {
 }
 
 function obStart() {
-  OB.step = 0; OB.answers = [];
+  OB.step = 0; OB.answers = []; OB.mode = 'new';
+  showPage('onboarding');
+  obRender();
+}
+
+function obStartRecalculate() {
+  OB.step = 0; OB.answers = []; OB.mode = 'recalculate';
+  // Close settings sheet first, then show onboarding
+  $el('settings-overlay').classList.remove('open');
+  document.body.style.overflow = '';
   showPage('onboarding');
   obRender();
 }
@@ -1311,15 +1325,15 @@ function obRender() {
     const lvl = eloToLevel(elo);
     const color = levelColor(lvl);
     const label = levelLabel(lvl);
-    $el('ob-next-btn').textContent = '🚀 Los geht\'s!';
+    $el('ob-next-btn').textContent = OB.mode === 'recalculate' ? '✓ Elo übernehmen' : '🚀 Los geht\'s!';
     $el('ob-next-btn').disabled = false;
     $el('ob-content').innerHTML = `
       <div class="ob-card ob-result">
-        <div style="font-size:.9rem;color:var(--text-muted);margin-bottom:.5rem">Dein Start-Level</div>
+        <div style="font-size:.9rem;color:var(--text-muted);margin-bottom:.5rem">${OB.mode === 'recalculate' ? 'Dein neues Level' : 'Dein Start-Level'}</div>
         <div class="ob-result-level" style="color:${color}">${lvl.toFixed(1)}</div>
         <div class="ob-result-badge" style="background:${color}22;color:${color}">${label}</div>
-        <div class="ob-result-desc">Basierend auf deinen Antworten starten wir dich bei Level ${lvl.toFixed(1)}.<br>Dein Level ändert sich mit jedem Match automatisch.</div>
-        <div class="ob-result-elo">Start-Elo: ${elo}</div>
+        <div class="ob-result-desc">Basierend auf deinen Antworten ${OB.mode === 'recalculate' ? 'wird dein Level auf' : 'starten wir dich bei'} ${lvl.toFixed(1)} ${OB.mode === 'recalculate' ? 'gesetzt' : 'gesetzt'}.<br>Dein Level ändert sich mit jedem Match automatisch.</div>
+        <div class="ob-result-elo">${OB.mode === 'recalculate' ? 'Neuer' : 'Start-'}Elo: ${elo}</div>
       </div>`;
   } else {
     const q = OB_QUESTIONS[OB.step];
@@ -1363,7 +1377,31 @@ function obBack() {
 
 async function obFinish() {
   const btn = $el('ob-next-btn');
-  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Einrichten…';
+  btn.disabled = true;
+
+  // ── Recalculate mode: just update own Elo ────────────────────────────
+  if (OB.mode === 'recalculate') {
+    btn.innerHTML = '<span class="spinner"></span> Aktualisieren…';
+    const elo = obCalcElo();
+    const { error } = await db.rpc('reset_own_elo', { p_elo: elo });
+    if (error) {
+      btn.disabled = false; btn.textContent = "🚀 Los geht's!";
+      document.getElementById('ob-content').insertAdjacentHTML('beforeend',
+        `<div class="alert alert-error" style="margin-top:.75rem">Fehler: ${error.message}</div>`);
+      return;
+    }
+    // Update local state immediately
+    if (S.player) S.player.elo = elo;
+    const pi = S.players.findIndex(p => p.id === S.player?.id);
+    if (pi >= 0) { S.players[pi].elo = elo; setCachedPlayers(S.players); }
+    toast(`Elo aktualisiert → ${elo}`, 'success');
+    showPage('app');
+    renderRanking(); buildMatchSelects();
+    return;
+  }
+
+  // ── New player mode: create player record ────────────────────────────
+  btn.innerHTML = '<span class="spinner"></span> Einrichten…';
   const elo = obCalcElo();
   const {id, name, club} = OB.pendingUser;
   const {error} = await db.from('players').insert({user_id:id, name, club, elo, matches:0, wins:0, losses:0, is_admin:false});
