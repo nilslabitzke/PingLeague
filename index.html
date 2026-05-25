@@ -525,9 +525,12 @@ const ELO_MIN = 100; // floor so Elo can never go below 100
 function calcElo(wElo, lElo, wM, lM) {
   const kW = wM < 30 ? S.settings.k_high : S.settings.k_low;
   const kL = lM < 30 ? S.settings.k_high : S.settings.k_low;
-  const eW = expected(wElo, lElo);
+  const eW = expected(wElo, lElo); // win probability of the actual winner
+  // Standard Elo: both gain and loss use (1 - eW).
+  // This means: beating a much weaker player → tiny gain, tiny loss for them.
+  // Losing to a much weaker player → huge penalty (= what you would have gained if you'd won).
   const gain = Math.round(kW * (1 - eW));
-  const loss = Math.round(kL * eW);
+  const loss = Math.round(kL * (1 - eW)); // was kL * eW — that was wrong
   return {
     wNew: Math.max(ELO_MIN, wElo + gain),
     lNew: Math.max(ELO_MIN, lElo - loss),
