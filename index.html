@@ -355,7 +355,7 @@
   <main>
     <!-- RANKING -->
     <div id="view-ranking" class="view active">
-      <div class="view-header"><h2>Rangliste</h2><p>Elo-Bewertungen · Level 0.5–7.0 · Echtzeit</p></div>
+      <div class="view-header"><h2>Rangliste</h2><p>Elo-Bewertungen · Level 0.5–7.0</p><p id="ranking-last-updated" style="font-size:.76rem;color:var(--text-dim);margin-top:.15rem"></p></div>
       <div id="month-banner-wrap"></div>
       <div class="ranking-table-wrapper">
         <table>
@@ -528,8 +528,19 @@ const PL_CACHE = 'pl_v1';
 function getCachedPlayers() {
   try { const c=JSON.parse(localStorage.getItem(PL_CACHE)||'null'); return c?.data||null; } catch(e){return null;}
 }
+function getCachedTs() {
+  try { const c=JSON.parse(localStorage.getItem(PL_CACHE)||'null'); return c?.ts||null; } catch(e){return null;}
+}
 function setCachedPlayers(data) {
   try { localStorage.setItem(PL_CACHE, JSON.stringify({data, ts:Date.now()})); } catch(e){}
+}
+function updateLastUpdated() {
+  const el=$el('ranking-last-updated'); if(!el) return;
+  const ts=getCachedTs(); if(!ts){el.textContent='';return;}
+  const diff=Math.round((Date.now()-ts)/60000);
+  if(diff<1) el.textContent='Zuletzt aktualisiert: gerade eben';
+  else if(diff<60) el.textContent=`Zuletzt aktualisiert: vor ${diff} Minute${diff!==1?'n':''}`;
+  else { const d=new Date(ts); el.textContent=`Zuletzt aktualisiert: ${d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})} Uhr`; }
 }
 function byId(id) { return S.players.find(p => p.id === id); }
 function $el(id) { return document.getElementById(id); }
@@ -662,28 +673,23 @@ async function loadPlayers() {
     if (!data || error) { console.error('loadPlayers:', error||'timeout'); return false; }
     S.players = data;
     setCachedPlayers(S.players); // save to cache for instant next load
+    updateLastUpdated();         // refresh the "last updated" label
     return true;
   } catch(e) { console.error('loadPlayers:', e); return false; }
 }
 
 // ── RANKING ───────────────────────────────────────────────────────────────
-async function renderRanking() {
-  // Monthly winner banner (non-blocking — failure just hides the banner)
-  await renderMonthBanner();
+function renderRanking() {
+  // Show last-updated timestamp immediately
+  updateLastUpdated();
+
   const tbody=$el('ranking-tbody');
   if (!S.players.length) { tbody.innerHTML='<tr><td colspan="7" class="text-center text-muted" style="padding:2rem">Noch keine Spieler.</td></tr>'; return; }
 
-  // Load recent matches for form dots (timeout so ranking still shows if slow)
-  const matchRes = await withTimeout(
-    db.from('matches').select('winner_id,loser_id,created_at').order('created_at',{ascending:false}).limit(200),
-    8000, {data: null}
-  );
-  const recentMatches = matchRes?.data;
-
+  // ── Render rows instantly (no DB calls, no waiting) ───────────────────
   tbody.innerHTML = S.players.map((p,i) => {
     const rank=i+1, lvl=eloToLevel(p.elo), col=levelColor(lvl), ac=avatarCol(p.name);
     const isMe = S.player&&p.id===S.player.id;
-    const form = buildFormDots(p.id, recentMatches||[]);
     return `<tr class="${isMe?'is-me':''}" onclick="openProfile('${p.id}')">
       <td class="rank-num ${rank<=3?'rank-top':''}">${rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':rank}</td>
       <td><div class="player-info">
@@ -692,11 +698,26 @@ async function renderRanking() {
       </div></td>
       <td><span class="level-badge" style="color:${col};background:${col}18">${lvl.toFixed(1)} <span style="font-size:.68rem;opacity:.7">${levelLabel(lvl)}</span></span></td>
       <td><span class="elo-val" style="color:${col}">${p.elo}</span></td>
-      <td><div class="form-dots">${form}</div></td>
+      <td><div class="form-dots" id="fdots-${p.id}"></div></td>
       <td>${p.wins} / ${p.losses}</td>
       <td>${p.matches}</td>
     </tr>`;
   }).join('');
+
+  // ── Load form dots in background (failure = dots just stay empty) ─────
+  withTimeout(
+    db.from('matches').select('winner_id,loser_id,created_at').order('created_at',{ascending:false}).limit(200),
+    8000, {data: null}
+  ).then(res => {
+    const recent = res?.data || [];
+    S.players.forEach(p => {
+      const el = document.getElementById('fdots-' + p.id);
+      if (el) el.innerHTML = buildFormDots(p.id, recent);
+    });
+  }).catch(()=>{});
+
+  // ── Load month banner in background ───────────────────────────────────
+  renderMonthBanner().catch(()=>{});
 }
 
 function buildFormDots(playerId, matches) {
