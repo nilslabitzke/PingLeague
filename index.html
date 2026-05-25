@@ -1249,17 +1249,19 @@ setTimeout(()=>{
 },6000);
 
 function init() {
-  // INITIAL_SESSION fires instantly from localStorage (no network) — fastest possible load
   db.auth.onAuthStateChange(async(event,session)=>{
     if(event==='SIGNED_OUT'){
       S.user=null;S.player=null;S.isAdmin=false;_initialized=false;showPage('auth');
-    } else if(event==='INITIAL_SESSION'||event==='SIGNED_IN'||event==='TOKEN_REFRESHED'){
-      if(session?.user&&!_initialized){
+    } else if(session?.user){
+      // Run setupUser if: no user loaded yet, OR a different user signed in
+      const needsSetup = !S.user || S.user.id!==session.user.id;
+      if(needsSetup){
         _initialized=true;
         try{await setupUser(session.user);}catch(e){console.error(e);showPage('auth');}
-      } else if(!session?.user&&event==='INITIAL_SESSION'&&!_initialized){
-        _initialized=true; showPage('auth');
       }
+    } else if(!session?.user&&!_initialized){
+      // No session on initial load → show auth immediately
+      _initialized=true; showPage('auth');
     }
   });
 
