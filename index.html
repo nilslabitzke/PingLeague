@@ -250,6 +250,18 @@
     @keyframes slideUp { from { transform:translateY(8px); opacity:0; } }
     @keyframes fadeOut { to { opacity:0; transform:translateY(-4px); } }
 
+    /* CHALLENGES */
+    .ch-badge { display:inline-flex; align-items:center; justify-content:center; background:var(--error); color:#fff; font-size:.58rem; font-weight:800; min-width:14px; height:14px; border-radius:999px; padding:0 3px; margin-left:3px; vertical-align:middle; line-height:1; }
+    .ch-badge:empty { display:none; }
+    .challenge-card { display:flex; align-items:center; gap:.75rem; padding:.75rem; background:var(--surface); border-radius:var(--radius-sm); margin-bottom:.5rem; }
+    .challenge-avatar { width:36px; height:36px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:.85rem; font-weight:800; flex-shrink:0; }
+    .challenge-info { flex:1; min-width:0; }
+    .challenge-name { font-weight:600; font-size:.9rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .challenge-time { font-size:.74rem; color:var(--text-muted); margin-top:.1rem; }
+    .challenge-actions { display:flex; gap:.4rem; flex-shrink:0; }
+    .ch-search-row { display:flex; align-items:center; gap:.75rem; padding:.6rem .5rem; border-radius:var(--radius-sm); transition:background .15s; }
+    .ch-search-row:hover { background:var(--card-hover); }
+
     /* SETTINGS MODAL */
     .settings-overlay { position:fixed; inset:0; z-index:300; background:rgba(0,0,0,.65); display:none; align-items:flex-end; justify-content:center; }
     .settings-overlay.open { display:flex; }
@@ -337,6 +349,7 @@
         <button class="nav-btn" data-view="match" onclick="showView('match')">Match</button>
         <button class="nav-btn" data-view="history" onclick="showView('history')">Verlauf</button>
         <button class="nav-btn" data-view="stats" onclick="showView('stats')">Stats</button>
+        <button class="nav-btn" data-view="challenges" onclick="showView('challenges')">⚔️ Challenges<span class="ch-badge" id="ch-badge-top"></span></button>
         <button class="nav-btn" data-view="admin" id="admin-nav" style="display:none" onclick="showView('admin')">Admin</button>
       </nav>
       <div class="user-area">
@@ -357,6 +370,7 @@
       <button class="bnav-btn" data-view="match" onclick="showView('match')"><span class="bnav-icon">➕</span>Match</button>
       <button class="bnav-btn" data-view="history" onclick="showView('history')"><span class="bnav-icon">📋</span>Verlauf</button>
       <button class="bnav-btn" data-view="stats" onclick="showView('stats')"><span class="bnav-icon">📊</span>Stats</button>
+      <button class="bnav-btn" data-view="challenges" onclick="showView('challenges')"><span class="bnav-icon">⚔️</span>Challenge<span class="ch-badge" id="ch-badge-bottom"></span></button>
       <button class="bnav-btn" data-view="admin" id="bottom-admin-btn" style="display:none" onclick="showView('admin')"><span class="bnav-icon">⚙️</span>Admin</button>
     </div>
   </div>
@@ -451,6 +465,28 @@
       </div>
     </div>
 
+    <!-- CHALLENGES -->
+    <div id="view-challenges" class="view">
+      <div class="view-header"><h2>Herausforderungen</h2><p>Fordere Mitspieler zum Match heraus</p></div>
+      <div style="display:flex;flex-direction:column;gap:1.25rem">
+        <div class="card">
+          <div class="card-title">🔍 Spieler herausfordern</div>
+          <div class="form-group" style="margin-bottom:.5rem">
+            <input type="text" id="challenge-search" placeholder="Name oder E-Mail…" oninput="filterChallengeSearch()" autocomplete="off">
+          </div>
+          <div id="challenge-search-results"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">📥 Eingehend</div>
+          <div id="challenges-incoming"><div class="text-muted" style="font-size:.85rem">Keine Herausforderungen.</div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">📤 Gesendet</div>
+          <div id="challenges-outgoing"><div class="text-muted" style="font-size:.85rem">Keine gesendeten Herausforderungen.</div></div>
+        </div>
+      </div>
+    </div>
+
     <!-- ADMIN -->
     <div id="view-admin" class="view">
       <div class="view-header"><h2>Admin Panel</h2><p>Systemeinstellungen und Spielerverwaltung</p></div>
@@ -522,7 +558,7 @@ const SUPABASE_URL = 'https://xsxsyfaxhwrbllvvfxxm.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzeHN5ZmF4aHdyYmxsdnZmeHhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MTM1NzIsImV4cCI6MjA5NTE4OTU3Mn0.y35dDJTrkCNMU7P0V4H8iSMprITdRst9kl7B5_BMvc8';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storage:window.localStorage } });
 
-let S = { user:null, player:null, isAdmin:false, players:[], settings:{ k_high:32, k_low:16 } };
+let S = { user:null, player:null, isAdmin:false, players:[], challenges:[], settings:{ k_high:32, k_low:16 } };
 
 // ── ELO & LEVEL ──────────────────────────────────────────────────────────
 function expected(ra, rb) { return 1 / (1 + Math.pow(10, (rb - ra) / 400)); }
@@ -790,6 +826,7 @@ async function setupUser(user) {
 
   applyPlayerData(pd, user);
   renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
+  loadChallenges(); // load badge in background
 }
 
 // ── DATA ──────────────────────────────────────────────────────────────────
@@ -906,6 +943,7 @@ async function openProfile(playerId) {
     <button onclick="closeProfile()" style="margin-left:auto;background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;line-height:1">✕</button>`;
 
   body.innerHTML=`
+    ${S.player&&playerId!==S.player.id?`<button class="btn btn-primary btn-full" style="margin-bottom:1.25rem" onclick="sendChallenge('${playerId}');closeProfile()">⚔️ Herausfordern</button>`:''}
     <div class="profile-stats-grid">
       <div class="pstat"><div class="pstat-val">${p.matches}</div><div class="pstat-label">Matches</div></div>
       <div class="pstat"><div class="pstat-val" style="color:var(--success)">${p.wins}</div><div class="pstat-label">Siege</div></div>
@@ -1260,6 +1298,157 @@ async function resetPlayerElo(pid,name) {
   toast(`${name} zurückgesetzt`,'success'); await loadPlayers(); renderRanking(); renderAdminPlayers();
 }
 
+// ── CHALLENGES ────────────────────────────────────────────────────────────
+function fmtAgo(iso) {
+  if (!iso) return '';
+  const diff = Math.round((Date.now() - new Date(iso)) / 60000);
+  if (diff < 1) return 'gerade eben';
+  if (diff < 60) return `vor ${diff} Min.`;
+  const h = Math.floor(diff / 60);
+  if (h < 24) return `vor ${h} Std.`;
+  const d = Math.floor(h / 24);
+  return `vor ${d} Tag${d !== 1 ? 'en' : ''}`;
+}
+
+async function loadChallenges() {
+  if (!S.player) return;
+  const { data } = await withTimeout(
+    db.from('challenges').select('*')
+      .or(`challenger_id.eq.${S.player.id},challenged_id.eq.${S.player.id}`)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false }),
+    8000, { data: null }
+  );
+  S.challenges = data || [];
+  updateChallengeBadge();
+}
+
+function updateChallengeBadge() {
+  const count = S.challenges.filter(c => c.challenged_id === S.player?.id).length;
+  const val = count > 0 ? String(count) : '';
+  ['ch-badge-top', 'ch-badge-bottom'].forEach(id => {
+    const el = $el(id); if (el) el.textContent = val;
+  });
+}
+
+async function sendChallenge(targetPlayerId) {
+  if (!S.player) return;
+  if (targetPlayerId === S.player.id) { toast('Du kannst dich nicht selbst herausfordern.', 'error'); return; }
+  const exists = S.challenges.some(c =>
+    (c.challenger_id === S.player.id && c.challenged_id === targetPlayerId) ||
+    (c.challenger_id === targetPlayerId && c.challenged_id === S.player.id)
+  );
+  if (exists) { toast('Es gibt bereits eine offene Herausforderung.', 'error'); return; }
+  const { error } = await db.from('challenges').insert({ challenger_id: S.player.id, challenged_id: targetPlayerId });
+  if (error) { toast(`Fehler: ${error.message}`, 'error'); return; }
+  toast('Herausforderung gesendet! ⚔️', 'success');
+  await loadChallenges();
+  if ($el('view-challenges').classList.contains('active')) renderChallengesView();
+}
+
+async function respondChallenge(challengeId, accept) {
+  const ch = S.challenges.find(c => c.id === challengeId);
+  const { error } = await db.from('challenges').delete().eq('id', challengeId);
+  if (error) { toast(`Fehler: ${error.message}`, 'error'); return; }
+  await loadChallenges();
+  if (accept && ch) {
+    toast('Herausforderung angenommen! ⚔️ Match eintragen:', 'success');
+    showView('match');
+    // Pre-fill match form with challenger as opponent
+    if (!S.isAdmin) {
+      refreshP2();
+      $el('m-p2').value = ch.challenger_id;
+    } else {
+      $el('m-p1').value = S.player.id;
+      refreshP2();
+      $el('m-p2').value = ch.challenger_id;
+    }
+    onPlayerChange();
+  } else {
+    toast('Herausforderung abgelehnt.', 'info');
+    renderChallengesView();
+  }
+}
+
+async function cancelChallenge(challengeId) {
+  const { error } = await db.from('challenges').delete().eq('id', challengeId);
+  if (error) { toast(`Fehler: ${error.message}`, 'error'); return; }
+  toast('Herausforderung zurückgezogen.', 'info');
+  await loadChallenges();
+  renderChallengesView();
+}
+
+function filterChallengeSearch() {
+  const q = $el('challenge-search').value.trim().toLowerCase();
+  const el = $el('challenge-search-results');
+  if (!q || q.length < 2) { el.innerHTML = ''; return; }
+  const results = S.players.filter(p =>
+    p.id !== S.player?.id &&
+    (p.name.toLowerCase().includes(q) || (p.email || '').toLowerCase().includes(q))
+  ).slice(0, 6);
+  if (!results.length) { el.innerHTML = '<div class="text-muted" style="font-size:.85rem;padding:.4rem 0">Kein Spieler gefunden.</div>'; return; }
+  el.innerHTML = results.map(p => {
+    const ac = avatarCol(p.name), lvl = eloToLevel(p.elo), col = levelColor(lvl);
+    const pending = S.challenges.some(c =>
+      (c.challenger_id === S.player?.id && c.challenged_id === p.id) ||
+      (c.challenger_id === p.id && c.challenged_id === S.player?.id)
+    );
+    return `<div class="ch-search-row">
+      <div class="challenge-avatar" style="background:${ac}22;color:${ac}">${initials(p.name)}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:600;font-size:.88rem">${esc(p.name)}</div>
+        <div style="font-size:.75rem;color:var(--text-muted)">${p.email ? esc(p.email) : (p.club ? esc(p.club) : '')}</div>
+      </div>
+      <span class="level-badge" style="color:${col};background:${col}18;font-size:.72rem">${lvl.toFixed(1)}</span>
+      ${pending
+        ? '<span style="font-size:.78rem;color:var(--text-muted);margin-left:.4rem">Ausstehend</span>'
+        : `<button class="btn btn-primary btn-sm" style="margin-left:.4rem" onclick="sendChallenge('${p.id}')">⚔️ Fordern</button>`}
+    </div>`;
+  }).join('');
+}
+
+function renderChallengesView() {
+  const incoming = S.challenges.filter(c => c.challenged_id === S.player?.id);
+  const outgoing = S.challenges.filter(c => c.challenger_id === S.player?.id);
+
+  const inEl = $el('challenges-incoming');
+  inEl.innerHTML = !incoming.length
+    ? '<div class="text-muted" style="font-size:.85rem">Keine eingehenden Herausforderungen.</div>'
+    : incoming.map(c => {
+        const p = byId(c.challenger_id); if (!p) return '';
+        const ac = avatarCol(p.name), lvl = eloToLevel(p.elo), col = levelColor(lvl);
+        return `<div class="challenge-card">
+          <div class="challenge-avatar" style="background:${ac}22;color:${ac}">${initials(p.name)}</div>
+          <div class="challenge-info">
+            <div class="challenge-name">${esc(p.name)}</div>
+            <div class="challenge-time">${fmtAgo(c.created_at)} · <span class="level-badge" style="color:${col};background:${col}18;font-size:.66rem">${lvl.toFixed(1)}</span></div>
+          </div>
+          <div class="challenge-actions">
+            <button class="btn btn-success btn-sm" onclick="respondChallenge('${c.id}',true)">✓ Annehmen</button>
+            <button class="btn btn-danger btn-sm" onclick="respondChallenge('${c.id}',false)">✕</button>
+          </div>
+        </div>`;
+      }).join('');
+
+  const outEl = $el('challenges-outgoing');
+  outEl.innerHTML = !outgoing.length
+    ? '<div class="text-muted" style="font-size:.85rem">Keine gesendeten Herausforderungen.</div>'
+    : outgoing.map(c => {
+        const p = byId(c.challenged_id); if (!p) return '';
+        const ac = avatarCol(p.name), lvl = eloToLevel(p.elo), col = levelColor(lvl);
+        return `<div class="challenge-card">
+          <div class="challenge-avatar" style="background:${ac}22;color:${ac}">${initials(p.name)}</div>
+          <div class="challenge-info">
+            <div class="challenge-name">${esc(p.name)}</div>
+            <div class="challenge-time">${fmtAgo(c.created_at)} · wartet auf Antwort…</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="cancelChallenge('${c.id}')">Zurückziehen</button>
+        </div>`;
+      }).join('');
+
+  filterChallengeSearch();
+}
+
 // ── NAVIGATION ────────────────────────────────────────────────────────────
 function showView(id) {
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -1270,6 +1459,7 @@ function showView(id) {
   else if(id==='ranking'){loadPlayers().then(renderRanking);}
   else if(id==='admin'){renderAdminPlayers();}
   else if(id==='stats'){renderStatsView();}
+  else if(id==='challenges'){loadChallenges().then(renderChallengesView);}
 }
 
 // ── ONBOARDING ────────────────────────────────────────────────────────────
