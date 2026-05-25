@@ -538,6 +538,10 @@
         <input type="text" id="settings-club" placeholder="TTC Musterstadt" autocomplete="off">
       </div>
       <div class="form-group">
+        <label>Stadt <span style="color:var(--text-dim)">(optional)</span></label>
+        <input type="text" id="settings-city" placeholder="z.B. Berlin" autocomplete="off">
+      </div>
+      <div class="form-group">
         <label style="color:var(--text-dim)">E-Mail (nicht änderbar)</label>
         <input type="text" id="settings-email" readonly style="opacity:.45;cursor:default">
       </div>
@@ -650,6 +654,7 @@ async function autoRefreshIfStale() {
   }
 }
 function byId(id) { return S.players.find(p => p.id === id); }
+function fmtClub(p) { return [p?.club, p?.city].filter(Boolean).join(', '); }
 function $el(id) { return document.getElementById(id); }
 function $val(id) { return $el(id).value.trim(); }
 function $inum(id) { return parseInt($el(id).value); }
@@ -717,6 +722,7 @@ function openSettings() {
   if (!S.player) return;
   $el('settings-name').value = S.player.name || '';
   $el('settings-club').value = S.player.club || '';
+  $el('settings-city').value = S.player.city || '';
   $el('settings-email').value = S.user?.email || '';
   $el('settings-alert').innerHTML = '';
   // Only admins may recalculate Elo
@@ -734,20 +740,21 @@ function closeSettings(e) {
 async function saveProfileSettings() {
   const name = $el('settings-name').value.trim();
   const club = $el('settings-club').value.trim();
+  const city = $el('settings-city').value.trim();
   const al = $el('settings-alert');
   al.innerHTML = '';
   if (!name) { al.innerHTML = '<div class="alert alert-error">Name darf nicht leer sein.</div>'; return; }
   const btn = $el('btn-settings-save');
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Speichern…';
-  const { error } = await db.rpc('update_player_profile', { p_name: name, p_club: club });
+  const { error } = await db.rpc('update_player_profile', { p_name: name, p_club: club, p_city: city });
   btn.disabled = false; btn.innerHTML = 'Speichern';
   if (error) { al.innerHTML = `<div class="alert alert-error">${error.message}</div>`; return; }
   // Update local state so UI refreshes immediately without a full reload
-  if (S.player) { S.player.name = name; S.player.club = club || null; }
+  if (S.player) { S.player.name = name; S.player.club = club || null; S.player.city = city || null; }
   const pi = S.players.findIndex(p => p.id === S.player?.id);
-  if (pi >= 0) { S.players[pi].name = name; S.players[pi].club = club || null; setCachedPlayers(S.players); }
+  if (pi >= 0) { S.players[pi].name = name; S.players[pi].club = club || null; S.players[pi].city = city || null; setCachedPlayers(S.players); }
   $el('header-user-name').textContent = name;
-  $el('header-user-club').textContent = club || '';
+  $el('header-user-club').textContent = fmtClub(S.player);
   toast('Profil aktualisiert ✓', 'success');
   $el('settings-overlay').classList.remove('open');
   document.body.style.overflow = '';
@@ -766,7 +773,7 @@ async function doLogout() {
 function applyPlayerData(pd, user) {
   S.player = pd; S.isAdmin = pd?.is_admin || false;
   $el('header-user-name').textContent = pd?.name || '';
-  $el('header-user-club').textContent = pd?.club || '';
+  $el('header-user-club').textContent = fmtClub(pd);
   $el('admin-nav').style.display = S.isAdmin ? '' : 'none';
   $el('bottom-admin-btn').style.display = S.isAdmin ? '' : 'none';
   $el('btn-manual-refresh').style.display = '';
@@ -860,7 +867,7 @@ function renderRanking() {
       <td class="rank-num ${rank<=3?'rank-top':''}">${rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':rank}</td>
       <td><div class="player-info">
         <div class="avatar" style="background:${ac}22;color:${ac}">${initials(p.name)}</div>
-        <div><div class="player-name">${esc(p.name)}${isMe?' <span class="me-tag">(du)</span>':''}</div>${p.club?`<div class="player-club">${esc(p.club)}</div>`:''}</div>
+        <div><div class="player-name">${esc(p.name)}${isMe?' <span class="me-tag">(du)</span>':''}</div>${fmtClub(p)?`<div class="player-club">${esc(fmtClub(p))}</div>`:''}</div>
       </div></td>
       <td><span class="level-badge" style="color:${col};background:${col}18">${lvl.toFixed(1)} <span style="font-size:.68rem;opacity:.7">${levelLabel(lvl)}</span></span></td>
       <td><div class="form-dots" id="fdots-${p.id}"></div></td>
@@ -933,7 +940,7 @@ async function openProfile(playerId) {
     <div class="profile-avatar-lg" style="background:${ac}22;color:${ac}">${initials(p.name)}</div>
     <div>
       <div class="profile-name">${esc(p.name)}</div>
-      ${p.club?`<div class="profile-club">🏟 ${esc(p.club)}</div>`:''}
+      ${fmtClub(p)?`<div class="profile-club">🏟 ${esc(fmtClub(p))}</div>`:''}
       ${p.email?`<div class="profile-club" style="color:var(--text-dim);font-size:.78rem">✉ ${esc(p.email)}</div>`:''}
       <div class="profile-badges">
         <button class="level-badge" style="color:${col};background:${col}22;border:none;cursor:pointer;font-size:.78rem;" title="Tippe für Elo" onclick="const s=this.nextElementSibling;s.style.display=s.style.display==='inline'?'none':'inline'">${lvl.toFixed(1)} ${levelLabel(lvl)} ▾</button>
@@ -1151,7 +1158,7 @@ function buildMatchSelects() {
 }
 function refreshP2() {
   const p1id=$el('m-p1').value, p2=$el('m-p2'), prev=p2.value;
-  p2.innerHTML='<option value="">— Gegner auswählen —</option>'+S.players.filter(p=>p.id!==p1id).map(p=>`<option value="${p.id}" ${p.id===prev?'selected':''}>${esc(p.name)}${p.club?` (${esc(p.club)})`:''}</option>`).join('');
+  p2.innerHTML='<option value="">— Gegner auswählen —</option>'+S.players.filter(p=>p.id!==p1id).map(p=>`<option value="${p.id}" ${p.id===prev?'selected':''}>${esc(p.name)}${fmtClub(p)?` (${esc(fmtClub(p))})`:''}</option>`).join('');
 }
 function onPlayerChange() { refreshP2(); updateEloPreview(); }
 
