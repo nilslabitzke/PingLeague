@@ -1623,9 +1623,7 @@ async function renderProfileView() {
           <div style="border-top:1px solid var(--border);padding-top:.65rem;display:flex;flex-direction:column;gap:.3rem">
             ${rank>0?`<div style="font-size:.82rem"><span style="color:var(--text-muted)">Platz in der Liga</span> <span style="font-weight:700">${rank}</span></div>`:''}
             <div style="font-size:.82rem"><span style="color:var(--text-muted)">Matches</span> <span style="font-weight:700">${p.matches}</span></div>
-            <div style="font-size:.82rem;cursor:pointer" onclick="document.getElementById('pv-elo-val').style.display='inline';document.getElementById('pv-elo-hidden').style.display='none'">
-              <span style="color:var(--text-muted)">Elo</span> <span id="pv-elo-val" style="font-weight:700;display:none">${p.elo}</span><span id="pv-elo-hidden" style="color:var(--text-dim)"> anzeigen ▾</span>
-            </div>
+            <div style="font-size:.82rem"><span style="color:var(--text-muted)">Elo</span> <span style="font-weight:700">${p.elo}</span></div>
             <div style="margin-top:.4rem">
               <button class="btn btn-primary btn-sm" onclick="showView('match')" style="font-size:.78rem;padding:.3rem .8rem">➕ Match eintragen</button>
             </div>
