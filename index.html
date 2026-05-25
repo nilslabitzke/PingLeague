@@ -464,6 +464,9 @@ function validSet(a, b) {
 function setWinner(a, b) { if (!validSet(a, b)) return 0; return Number(a) > Number(b) ? 1 : 2; }
 
 // ── HELPERS ───────────────────────────────────────────────────────────────
+function withTimeout(promise, ms, fallback) {
+  return Promise.race([promise, new Promise(r => setTimeout(() => r(fallback), ms))]);
+}
 function byId(id) { return S.players.find(p => p.id === id); }
 function $el(id) { return document.getElementById(id); }
 function $val(id) { return $el(id).value.trim(); }
@@ -531,25 +534,33 @@ async function doLogout() { await db.auth.signOut(); }
 // ── SETUP ─────────────────────────────────────────────────────────────────
 async function setupUser(user) {
   S.user = user;
-  $el('loading').style.display='flex';
-  const [{data:pd},{data:sd}] = await Promise.all([
-    db.from('players').select('*').eq('user_id',user.id).maybeSingle(),
-    db.from('settings').select('*').limit(1).maybeSingle()
+  // Fetch player profile + settings with 8s timeout each — never block app startup
+  const [pdRes, sdRes] = await Promise.all([
+    withTimeout(db.from('players').select('*').eq('user_id',user.id).maybeSingle(), 8000, {data:null,error:'timeout'}),
+    withTimeout(db.from('settings').select('*').limit(1).maybeSingle(), 8000, {data:null,error:'timeout'})
   ]);
+  const pd = pdRes?.data ?? null;
+  const sd = sdRes?.data ?? null;
   S.player=pd; S.isAdmin=pd?.is_admin||false;
   if (sd) { S.settings={k_high:sd.k_high||32,k_low:sd.k_low||16}; $el('k-high').value=S.settings.k_high; $el('k-low').value=S.settings.k_low; }
   $el('header-user-name').textContent=pd?.name||user.email;
   $el('admin-nav').style.display = S.isAdmin?'':'none';
   $el('bottom-admin-btn').style.display = S.isAdmin?'':'none';
-  await loadPlayers();
-  renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
+  buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
   showPage('app');
+  // Load ranking in background
+  loadPlayers().then(() => {
+    renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
+  }).catch(e => console.error('loadPlayers:', e));
 }
 
 // ── DATA ──────────────────────────────────────────────────────────────────
 async function loadPlayers() {
-  const {data,error} = await db.from('players').select('*').order('elo',{ascending:false});
-  if (!error) S.players=data||[];
+  const res = await withTimeout(
+    db.from('players').select('*').order('elo',{ascending:false}),
+    10000, {data:[], error:'timeout'}
+  );
+  if (!res.error) S.players = res.data || [];
 }
 
 // ── RANKING ───────────────────────────────────────────────────────────────
