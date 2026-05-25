@@ -332,7 +332,10 @@
         <button class="nav-btn" data-view="admin" id="admin-nav" style="display:none" onclick="showView('admin')">Admin</button>
       </nav>
       <div class="user-area">
-        <span id="header-user-name"></span>
+        <button id="header-user-btn" onclick="S.player&&openProfile(S.player.id)" style="background:none;border:none;cursor:pointer;text-align:right;color:var(--text);line-height:1.3;">
+          <div id="header-user-name" style="font-weight:600;font-size:.9rem"></div>
+          <div id="header-user-club" style="font-size:.75rem;color:var(--text-muted)"></div>
+        </button>
         <button class="btn btn-secondary btn-sm" onclick="doLogout()">Abmelden</button>
       </div>
     </div>
@@ -589,7 +592,8 @@ async function doLogout() { await db.auth.signOut(); }
 async function setupUser(user) {
   S.user = user;
   // Show app immediately — no waiting
-  $el('header-user-name').textContent = user.email;
+  $el('header-user-name').textContent = '';
+  $el('header-user-club').textContent = '';
   $el('admin-nav').style.display = 'none';
   $el('bottom-admin-btn').style.display = 'none';
   showPage('app');
@@ -613,7 +617,8 @@ async function setupUser(user) {
   }
 
   S.player = pd; S.isAdmin = pd?.is_admin || false;
-  $el('header-user-name').textContent = pd?.name || user.email;
+  $el('header-user-name').textContent = pd?.name || '';
+  $el('header-user-club').textContent = pd?.club || '';
   $el('admin-nav').style.display = S.isAdmin ? '' : 'none';
   $el('bottom-admin-btn').style.display = S.isAdmin ? '' : 'none';
   renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
@@ -621,12 +626,13 @@ async function setupUser(user) {
 
 // ── DATA ──────────────────────────────────────────────────────────────────
 async function loadPlayers() {
-  const res = await withTimeout(
-    db.from('players').select('*').order('elo',{ascending:false}),
-    10000, {data:null, error:'timeout'}
-  );
-  if (res.data !== null && !res.error) { S.players = res.data || []; return true; }
-  return false; // timed out or error — don't trust the result
+  // No timeout here — app is already shown, we just update whenever DB responds
+  try {
+    const {data, error} = await db.from('players').select('*').order('elo',{ascending:false});
+    if (error) { console.error('loadPlayers:', error); return false; }
+    S.players = data || [];
+    return true;
+  } catch(e) { console.error('loadPlayers:', e); return false; }
 }
 
 // ── RANKING ───────────────────────────────────────────────────────────────
@@ -702,7 +708,8 @@ async function openProfile(playerId) {
     <div class="profile-avatar-lg" style="background:${ac}22;color:${ac}">${initials(p.name)}</div>
     <div>
       <div class="profile-name">${esc(p.name)}</div>
-      ${p.club?`<div class="profile-club">${esc(p.club)}</div>`:''}
+      ${p.club?`<div class="profile-club">🏟 ${esc(p.club)}</div>`:''}
+      ${p.user_id===S.user?.id?`<div class="profile-club" style="color:var(--text-dim);font-size:.78rem">${esc(S.user.email)}</div>`:''}
       <div class="profile-badges">
         <button class="level-badge" style="color:${col};background:${col}22;border:none;cursor:pointer;font-size:.78rem;" title="Tippe für Elo" onclick="const s=this.nextElementSibling;s.style.display=s.style.display==='inline'?'none':'inline'">${lvl.toFixed(1)} ${levelLabel(lvl)} ▾</button>
         <span style="font-size:.78rem;color:var(--text-muted);display:none">Elo ${p.elo}</span>
