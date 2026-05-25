@@ -250,6 +250,14 @@
     @keyframes slideUp { from { transform:translateY(8px); opacity:0; } }
     @keyframes fadeOut { to { opacity:0; transform:translateY(-4px); } }
 
+    /* SETTINGS MODAL */
+    .settings-overlay { position:fixed; inset:0; z-index:300; background:rgba(0,0,0,.65); display:none; align-items:flex-end; justify-content:center; }
+    .settings-overlay.open { display:flex; }
+    .settings-sheet { background:var(--surface); border-radius:16px 16px 0 0; width:100%; max-width:500px; animation:sheetUp .3s ease; }
+    .settings-header { padding:1.1rem 1.5rem; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+    .settings-title { font-size:1.05rem; font-weight:800; }
+    .settings-body { padding:1.5rem; }
+
     /* UTILS */
     .text-muted { color:var(--text-muted); } .text-center { text-align:center; }
     .me-tag { color:var(--primary-lt); font-size:.72rem; font-weight:700; }
@@ -336,6 +344,7 @@
           <div id="header-user-name" style="font-weight:600;font-size:.9rem"></div>
           <div id="header-user-club" style="font-size:.75rem;color:var(--text-muted)"></div>
         </button>
+        <button class="btn btn-secondary btn-sm" onclick="openSettings()" title="Profil bearbeiten" style="padding:.35rem .55rem">⚙️</button>
         <button class="btn btn-secondary btn-sm" onclick="doLogout()">Abmelden</button>
       </div>
     </div>
@@ -464,6 +473,33 @@
     <div class="profile-handle"></div>
     <div class="profile-header" id="profile-header"></div>
     <div class="profile-body" id="profile-body"></div>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="settings-overlay" id="settings-overlay" onclick="closeSettings(event)">
+  <div class="settings-sheet">
+    <div class="profile-handle"></div>
+    <div class="settings-header">
+      <div class="settings-title">Profil bearbeiten</div>
+      <button onclick="closeSettings()" style="background:none;border:none;color:var(--text-muted);font-size:1.4rem;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <div class="settings-body">
+      <div id="settings-alert"></div>
+      <div class="form-group">
+        <label>Name</label>
+        <input type="text" id="settings-name" placeholder="Dein Name" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label>Verein <span style="color:var(--text-dim)">(optional)</span></label>
+        <input type="text" id="settings-club" placeholder="TTC Musterstadt" autocomplete="off">
+      </div>
+      <div class="form-group">
+        <label style="color:var(--text-dim)">E-Mail (nicht änderbar)</label>
+        <input type="text" id="settings-email" readonly style="opacity:.45;cursor:default">
+      </div>
+      <button class="btn btn-primary btn-full" id="btn-settings-save" onclick="saveProfileSettings()">Speichern</button>
+    </div>
   </div>
 </div>
 
@@ -624,6 +660,46 @@ async function doRegister() {
   } else {
     al.innerHTML='<div class="alert alert-success">Konto erstellt! Bitte E-Mail bestätigen.</div>';
   }
+}
+
+// ── SETTINGS ──────────────────────────────────────────────────────────────
+function openSettings() {
+  if (!S.player) return;
+  $el('settings-name').value = S.player.name || '';
+  $el('settings-club').value = S.player.club || '';
+  $el('settings-email').value = S.user?.email || '';
+  $el('settings-alert').innerHTML = '';
+  $el('settings-overlay').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeSettings(e) {
+  if (e && e.target !== $el('settings-overlay')) return;
+  $el('settings-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+async function saveProfileSettings() {
+  const name = $el('settings-name').value.trim();
+  const club = $el('settings-club').value.trim();
+  const al = $el('settings-alert');
+  al.innerHTML = '';
+  if (!name) { al.innerHTML = '<div class="alert alert-error">Name darf nicht leer sein.</div>'; return; }
+  const btn = $el('btn-settings-save');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Speichern…';
+  const { error } = await db.rpc('update_player_profile', { p_name: name, p_club: club });
+  btn.disabled = false; btn.innerHTML = 'Speichern';
+  if (error) { al.innerHTML = `<div class="alert alert-error">${error.message}</div>`; return; }
+  // Update local state so UI refreshes immediately without a full reload
+  if (S.player) { S.player.name = name; S.player.club = club || null; }
+  const pi = S.players.findIndex(p => p.id === S.player?.id);
+  if (pi >= 0) { S.players[pi].name = name; S.players[pi].club = club || null; setCachedPlayers(S.players); }
+  $el('header-user-name').textContent = name;
+  $el('header-user-club').textContent = club || '';
+  toast('Profil aktualisiert ✓', 'success');
+  $el('settings-overlay').classList.remove('open');
+  document.body.style.overflow = '';
+  renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
 }
 
 async function doLogout() {
@@ -790,7 +866,6 @@ async function openProfile(playerId) {
     <div>
       <div class="profile-name">${esc(p.name)}</div>
       ${p.club?`<div class="profile-club">🏟 ${esc(p.club)}</div>`:''}
-      ${p.user_id===S.user?.id?`<div class="profile-club" style="color:var(--text-dim);font-size:.78rem">${esc(S.user.email)}</div>`:''}
       <div class="profile-badges">
         <button class="level-badge" style="color:${col};background:${col}22;border:none;cursor:pointer;font-size:.78rem;" title="Tippe für Elo" onclick="const s=this.nextElementSibling;s.style.display=s.style.display==='inline'?'none':'inline'">${lvl.toFixed(1)} ${levelLabel(lvl)} ▾</button>
         <span style="font-size:.78rem;color:var(--text-muted);display:none">Elo ${p.elo}</span>
