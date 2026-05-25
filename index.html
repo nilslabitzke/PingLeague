@@ -523,6 +523,14 @@ function setWinner(a, b) { if (!validSet(a, b)) return 0; return Number(a) > Num
 function withTimeout(promise, ms, fallback) {
   return Promise.race([promise, new Promise(r => setTimeout(() => r(fallback), ms))]);
 }
+// ── PLAYER CACHE (localStorage) ───────────────────────────────────────────
+const PL_CACHE = 'pl_v1';
+function getCachedPlayers() {
+  try { const c=JSON.parse(localStorage.getItem(PL_CACHE)||'null'); return c?.data||null; } catch(e){return null;}
+}
+function setCachedPlayers(data) {
+  try { localStorage.setItem(PL_CACHE, JSON.stringify({data, ts:Date.now()})); } catch(e){}
+}
 function byId(id) { return S.players.find(p => p.id === id); }
 function $el(id) { return document.getElementById(id); }
 function $val(id) { return $el(id).value.trim(); }
@@ -589,48 +597,57 @@ async function doRegister() {
 async function doLogout() { await db.auth.signOut(); }
 
 // ── SETUP ─────────────────────────────────────────────────────────────────
+function applyPlayerData(pd, user) {
+  S.player = pd; S.isAdmin = pd?.is_admin || false;
+  $el('header-user-name').textContent = pd?.name || '';
+  $el('header-user-club').textContent = pd?.club || '';
+  $el('admin-nav').style.display = S.isAdmin ? '' : 'none';
+  $el('bottom-admin-btn').style.display = S.isAdmin ? '' : 'none';
+}
+
 async function setupUser(user) {
   S.user = user;
-  // Show app immediately — no waiting
   $el('header-user-name').textContent = '';
   $el('header-user-club').textContent = '';
   $el('admin-nav').style.display = 'none';
   $el('bottom-admin-btn').style.display = 'none';
   showPage('app');
 
-  // Load settings in background (non-blocking)
+  // ── STEP 1: Show cached data instantly ────────────────────────────────
+  const cached = getCachedPlayers();
+  if (cached) {
+    S.players = cached;
+    const cpd = cached.find(p => p.user_id === user.id) || null;
+    applyPlayerData(cpd, user);
+    renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
+  }
+
+  // ── STEP 2: Load fresh data in background ─────────────────────────────
   withTimeout(db.from('settings').select('*').limit(1).maybeSingle(), 5000, {data:null})
     .then(r => {
       const sd = r?.data;
       if (sd) { S.settings={k_high:sd.k_high||32,k_low:sd.k_low||16}; $el('k-high').value=S.settings.k_high; $el('k-low').value=S.settings.k_low; }
     }).catch(console.error);
 
-  // Load all players — find current user's record in result (avoids separate filtered query)
-  const playersLoaded = await loadPlayers();
+  const playersLoaded = await loadPlayers(); // saves to cache internally
   const pd = S.players.find(p => p.user_id === user.id) || null;
 
-  // Only trigger onboarding if query succeeded AND genuinely no record exists
   if (playersLoaded && !pd) {
     OB.pendingUser = {id: user.id, name: user.email.split('@')[0], club: null};
-    obStart();
-    return;
+    obStart(); return;
   }
 
-  S.player = pd; S.isAdmin = pd?.is_admin || false;
-  $el('header-user-name').textContent = pd?.name || '';
-  $el('header-user-club').textContent = pd?.club || '';
-  $el('admin-nav').style.display = S.isAdmin ? '' : 'none';
-  $el('bottom-admin-btn').style.display = S.isAdmin ? '' : 'none';
+  applyPlayerData(pd, user);
   renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
 }
 
 // ── DATA ──────────────────────────────────────────────────────────────────
 async function loadPlayers() {
-  // No timeout here — app is already shown, we just update whenever DB responds
   try {
     const {data, error} = await db.from('players').select('*').order('elo',{ascending:false});
     if (error) { console.error('loadPlayers:', error); return false; }
     S.players = data || [];
+    setCachedPlayers(S.players); // save to cache for instant next load
     return true;
   } catch(e) { console.error('loadPlayers:', e); return false; }
 }
