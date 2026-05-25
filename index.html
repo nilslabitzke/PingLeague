@@ -604,6 +604,14 @@ async function setupUser(user) {
   // Load all players — find current user's record in result (avoids separate filtered query)
   await loadPlayers();
   const pd = S.players.find(p => p.user_id === user.id) || null;
+
+  // No player record → new user who skipped / couldn't complete onboarding
+  if (!pd) {
+    OB.pendingUser = {id: user.id, name: user.email.split('@')[0], club: null};
+    obStart();
+    return;
+  }
+
   S.player = pd; S.isAdmin = pd?.is_admin || false;
   $el('header-user-name').textContent = pd?.name || user.email;
   $el('admin-nav').style.display = S.isAdmin ? '' : 'none';
@@ -1171,15 +1179,24 @@ async function obFinish() {
   const elo = obCalcElo();
   const {id, name, club} = OB.pendingUser;
   const {error} = await db.from('players').insert({user_id:id, name, club, elo, matches:0, wins:0, losses:0, is_admin:false});
-  if (error) { console.error(error); btn.disabled=false; btn.textContent="🚀 Los geht's!"; return; }
-  // Player created — now load the app (auth session should already be set)
+  if (error) {
+    console.error(error);
+    btn.disabled=false; btn.textContent="🚀 Los geht's!";
+    document.getElementById('ob-content').insertAdjacentHTML('beforeend',
+      `<div class="alert alert-error" style="margin-top:.75rem">Fehler beim Speichern: ${error.message}</div>`);
+    return;
+  }
+  // Player created — load the app
   _initialized = false;
   const {data} = await withTimeout(db.auth.getSession(), 4000, {data:{session:null}});
   if (data?.session?.user) {
     _initialized = true;
     await setupUser(data.session.user);
   } else {
+    // Email confirmation required — send user to login with a hint
     showPage('auth');
+    switchTab('login');
+    $el('login-alert').innerHTML = '<div class="alert alert-success">Profil erstellt! Melde dich jetzt an.</div>';
   }
 }
 
