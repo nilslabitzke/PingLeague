@@ -345,9 +345,9 @@
     <div class="header-inner">
       <div class="logo">🏓 PingLeague</div>
       <nav class="top-nav">
-        <button class="nav-btn active" data-view="ranking" onclick="showView('ranking')">Rangliste</button>
+        <button class="nav-btn active" data-view="profile" onclick="showView('profile')">Profil</button>
+        <button class="nav-btn" data-view="ranking" onclick="showView('ranking')">Rangliste</button>
         <button class="nav-btn" data-view="match" onclick="showView('match')">Match</button>
-        <button class="nav-btn" data-view="history" onclick="showView('history')">Verlauf</button>
         <button class="nav-btn" data-view="stats" onclick="showView('stats')">Stats</button>
         <button class="nav-btn" data-view="challenges" onclick="showView('challenges')">⚔️ Challenges<span class="ch-badge" id="ch-badge-top"></span></button>
         <button class="nav-btn" data-view="admin" id="admin-nav" style="display:none" onclick="showView('admin')">Admin</button>
@@ -366,9 +366,9 @@
   <!-- BOTTOM NAV (mobile) -->
   <div class="bottom-nav">
     <div class="bottom-nav-inner">
-      <button class="bnav-btn active" data-view="ranking" onclick="showView('ranking')"><span class="bnav-icon">🏆</span>Liga</button>
+      <button class="bnav-btn active" data-view="profile" onclick="showView('profile')"><span class="bnav-icon">👤</span>Profil</button>
+      <button class="bnav-btn" data-view="ranking" onclick="showView('ranking')"><span class="bnav-icon">🏆</span>Liga</button>
       <button class="bnav-btn" data-view="match" onclick="showView('match')"><span class="bnav-icon">➕</span>Match</button>
-      <button class="bnav-btn" data-view="history" onclick="showView('history')"><span class="bnav-icon">📋</span>Verlauf</button>
       <button class="bnav-btn" data-view="stats" onclick="showView('stats')"><span class="bnav-icon">📊</span>Stats</button>
       <button class="bnav-btn" data-view="challenges" onclick="showView('challenges')"><span class="bnav-icon">⚔️</span>Challenge<span class="ch-badge" id="ch-badge-bottom"></span></button>
       <button class="bnav-btn" data-view="admin" id="bottom-admin-btn" style="display:none" onclick="showView('admin')"><span class="bnav-icon">⚙️</span>Admin</button>
@@ -376,15 +376,24 @@
   </div>
 
   <main>
+    <!-- PROFIL -->
+    <div id="view-profile" class="view active">
+      <div class="view-header"><h2>Mein Profil</h2><p>Dein Level, Stats und letzte Matches</p></div>
+      <div id="profile-view-content"><div class="empty-state"><div class="empty-icon">⏳</div><p>Lade…</p></div></div>
+    </div>
+
     <!-- RANKING -->
-    <div id="view-ranking" class="view active">
-      <div class="view-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem">
+    <div id="view-ranking" class="view">
+      <div class="view-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap;">
         <div>
           <h2>Rangliste</h2>
           <p>Elo-Bewertungen · Level 0.5–7.0</p>
           <p id="ranking-last-updated" style="font-size:.76rem;color:var(--text-dim);margin-top:.15rem"></p>
         </div>
-        <button id="btn-manual-refresh" onclick="manualRefresh()" style="display:none;flex-shrink:0;margin-top:.25rem" class="btn btn-secondary btn-sm">↻ Jetzt aktualisieren</button>
+        <div style="display:flex;gap:.5rem;flex-shrink:0;margin-top:.25rem;align-items:center;">
+          <button id="btn-manual-refresh" onclick="manualRefresh()" style="display:none" class="btn btn-secondary btn-sm">↻ Aktualisieren</button>
+          <button id="btn-toggle-history" onclick="toggleRankingHistory()" class="btn btn-secondary btn-sm">📋 Verlauf</button>
+        </div>
       </div>
       <div id="month-banner-wrap"></div>
       <div class="ranking-table-wrapper">
@@ -392,6 +401,17 @@
           <thead><tr><th style="width:44px">#</th><th>Spieler</th><th>Level</th><th>Form</th><th>S / N</th><th>Matches</th></tr></thead>
           <tbody id="ranking-tbody"><tr><td colspan="6" class="text-center text-muted" style="padding:2rem">Lade…</td></tr></tbody>
         </table>
+      </div>
+      <!-- Collapsible history panel -->
+      <div id="ranking-history-panel" style="display:none;margin-top:1.5rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.75rem">
+          <h3 style="margin:0;font-size:1rem;font-weight:700">Spielverlauf</h3>
+          <button class="btn btn-secondary btn-sm" onclick="loadHistory()">↻ Aktualisieren</button>
+        </div>
+        <div class="history-filters">
+          <select id="history-filter" onchange="loadHistory()"><option value="">Alle Spieler</option></select>
+        </div>
+        <div id="history-list"><div class="empty-state"><div class="empty-icon">⏳</div><p>Lade…</p></div></div>
       </div>
     </div>
 
@@ -426,16 +446,6 @@
         </div>
         <button class="btn btn-success btn-full" id="btn-submit-match" onclick="submitMatch()">Match eintragen</button>
       </div>
-    </div>
-
-    <!-- HISTORY -->
-    <div id="view-history" class="view">
-      <div class="view-header"><h2>Spielverlauf</h2><p>Zuletzt eingetragene Matches</p></div>
-      <div class="history-filters">
-        <select id="history-filter" onchange="loadHistory()"><option value="">Alle Spieler</option></select>
-        <button class="btn btn-secondary btn-sm" onclick="loadHistory()">↻ Aktualisieren</button>
-      </div>
-      <div id="history-list"><div class="empty-state"><div class="empty-icon">⏳</div><p>Lade…</p></div></div>
     </div>
 
     <!-- STATS -->
@@ -759,6 +769,8 @@ async function saveProfileSettings() {
   $el('settings-overlay').classList.remove('open');
   document.body.style.overflow = '';
   renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
+  // Refresh profile view if it's currently visible
+  if ($el('view-profile').classList.contains('active')) renderProfileView();
 }
 
 async function doLogout() {
@@ -810,6 +822,7 @@ async function setupUser(user) {
     const cpd = cached.find(p => p.user_id === user.id) || null;
     applyPlayerData(cpd, user);
     renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
+    showView('profile'); // default landing tab
   }
 
   // ── Load settings in background ───────────────────────────────────────
@@ -834,6 +847,8 @@ async function setupUser(user) {
   applyPlayerData(pd, user);
   renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
   loadChallenges(); // load badge in background
+  // Show profile tab first so the user lands on their own profile
+  showView('profile');
 }
 
 // ── DATA ──────────────────────────────────────────────────────────────────
@@ -1243,7 +1258,9 @@ async function submitMatch() {
     $el('m-p2').value=''; $el('elo-preview').style.display='none';
     toast(`✓ ${w.name} gewinnt +${elo.gain} Elo`,'success');
     await loadPlayers(); renderRanking(); buildMatchSelects();
-    if(S.player) S.player=byId(S.player.id)||S.player;
+    if(S.player) { S.player=byId(S.player.id)||S.player; }
+    // Refresh profile tab if open so stats update immediately
+    if ($el('view-profile').classList.contains('active')) renderProfileView();
   } catch(err) { console.error(err); alEl.innerHTML=`<div class="alert alert-error">Fehler: ${err.message}</div>`; }
   btn.disabled=false; btn.innerHTML='Match eintragen';
 }
@@ -1462,11 +1479,95 @@ function showView(id) {
   document.querySelectorAll('.nav-btn,.bnav-btn').forEach(b=>b.classList.remove('active'));
   $el(`view-${id}`).classList.add('active');
   document.querySelectorAll(`[data-view="${id}"]`).forEach(b=>b.classList.add('active'));
-  if(id==='history'){buildHistoryFilter();loadHistory();}
+  if(id==='profile'){renderProfileView();}
   else if(id==='ranking'){loadPlayers().then(renderRanking);}
   else if(id==='admin'){renderAdminPlayers();}
   else if(id==='stats'){renderStatsView();}
   else if(id==='challenges'){loadChallenges().then(renderChallengesView);}
+}
+
+function toggleRankingHistory() {
+  const panel = $el('ranking-history-panel');
+  const btn = $el('btn-toggle-history');
+  const isOpen = panel.style.display !== 'none';
+  panel.style.display = isOpen ? 'none' : 'block';
+  btn.classList.toggle('active', !isOpen);
+  if (!isOpen) { buildHistoryFilter(); loadHistory(); }
+}
+
+// ── PROFILE VIEW (inline) ─────────────────────────────────────────────────
+async function renderProfileView() {
+  const container = $el('profile-view-content');
+  if (!S.player) {
+    container.innerHTML = '<div class="empty-state"><div class="empty-icon">👤</div><p>Kein Spielerprofil gefunden.</p></div>';
+    return;
+  }
+  const p = S.player;
+  const ac = avatarCol(p.name), lvl = eloToLevel(p.elo), col = levelColor(lvl);
+  const wr = p.matches > 0 ? Math.round(p.wins / p.matches * 100) : 0;
+  const rank = S.players.findIndex(pl => pl.id === p.id) + 1;
+
+  container.innerHTML = `
+    <div class="card" style="margin-bottom:1rem">
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+        <div class="profile-avatar-lg" style="background:${ac}22;color:${ac};flex-shrink:0">${initials(p.name)}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:1.15rem;font-weight:700;margin-bottom:.2rem">${esc(p.name)}</div>
+          ${fmtClub(p)?`<div style="font-size:.82rem;color:var(--text-muted);margin-bottom:.3rem">🏟 ${esc(fmtClub(p))}</div>`:''}
+          <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
+            <span class="level-badge" style="color:${col};background:${col}22;cursor:pointer;font-size:.85rem" onclick="const s=document.getElementById('pv-elo-hint');s.style.display=s.style.display==='inline'?'none':'inline'">${lvl.toFixed(1)} ${levelLabel(lvl)} ▾</span>
+            <span id="pv-elo-hint" style="font-size:.78rem;color:var(--text-muted);display:none">Elo ${p.elo}</span>
+            ${rank>0?`<span style="font-size:.78rem;color:var(--text-dim)">Platz ${rank} in der Liga</span>`:''}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="profile-stats-grid card" style="margin-bottom:1rem">
+      <div class="pstat"><div class="pstat-val">${p.matches}</div><div class="pstat-label">Matches</div></div>
+      <div class="pstat"><div class="pstat-val" style="color:var(--success)">${p.wins}</div><div class="pstat-label">Siege</div></div>
+      <div class="pstat"><div class="pstat-val" style="color:var(--error)">${p.losses}</div><div class="pstat-label">Niederl.</div></div>
+      <div class="pstat"><div class="pstat-val">${wr}%</div><div class="pstat-label">Quote</div></div>
+    </div>
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">Level-Verlauf</div>
+      <div class="chart-wrap" id="pv-chart"><div class="text-muted text-center" style="font-size:.88rem">Lade Chart…</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Letzte Matches</div>
+      <div id="pv-matches"><div class="text-muted" style="font-size:.88rem">Lade…</div></div>
+    </div>`;
+
+  // Load chart + recent matches async
+  const [histData, matchRes] = await Promise.all([
+    loadPlayerEloHistory(p.id),
+    withTimeout(
+      db.from('matches').select('*').or(`winner_id.eq.${p.id},loser_id.eq.${p.id}`).order('created_at',{ascending:false}).limit(10),
+      10000, {data:null}
+    )
+  ]);
+
+  const chartEl = $el('pv-chart');
+  if (chartEl) chartEl.innerHTML = renderEloChart(histData);
+
+  const matchEl = $el('pv-matches');
+  if (!matchEl) return;
+  const matches = matchRes?.data || [];
+  if (!matches.length) {
+    matchEl.innerHTML = '<div class="text-muted" style="font-size:.85rem">Noch keine Matches.</div>';
+  } else {
+    matchEl.innerHTML = matches.map(m => {
+      const isW = m.winner_id === p.id;
+      const opp = byId(isW ? m.loser_id : m.winner_id);
+      const sets = (m.sets||[]).map(s=>`<span class="set-chip">${s.p1??'?'}:${s.p2??'?'}</span>`).join('');
+      const delta = isW ? `+${m.elo_delta}` : '-'+Math.abs((m.elo_loser_before||0)-(m.elo_loser_after||0));
+      return `<div style="display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--border)">
+        <span style="font-size:.85rem;font-weight:700;color:${isW?'var(--success)':'var(--error)'}">${isW?'S':'N'}</span>
+        <span style="flex:1;font-size:.88rem">${opp?esc(opp.name):'?'}</span>
+        <div class="match-sets">${sets}</div>
+        <span style="font-size:.78rem;font-weight:700;color:${isW?'var(--success)':'var(--error)'}">${delta}</span>
+      </div>`;
+    }).join('');
+  }
 }
 
 // ── ONBOARDING ────────────────────────────────────────────────────────────
