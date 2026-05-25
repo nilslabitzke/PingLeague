@@ -20,6 +20,39 @@
     /* LOADING */
     #loading { display:flex; align-items:center; justify-content:center; height:100vh; gap:1rem; color:var(--text-muted); font-size:1.1rem; }
 
+    /* ONBOARDING */
+    #onboarding-page { display:none; min-height:100vh; align-items:flex-start; justify-content:center; padding:1.5rem; background:var(--bg); overflow-y:auto; }
+    .ob-wrap { width:100%; max-width:520px; margin:0 auto; padding:2rem 0 4rem; }
+    .ob-logo { text-align:center; font-size:2rem; font-weight:800; background:linear-gradient(135deg,var(--primary),var(--diamond)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; margin-bottom:.3rem; }
+    .ob-subtitle { text-align:center; color:var(--text-muted); margin-bottom:2rem; font-size:.95rem; }
+    .ob-progress-wrap { margin-bottom:2rem; }
+    .ob-progress-label { display:flex; justify-content:space-between; font-size:.8rem; color:var(--text-muted); margin-bottom:.5rem; }
+    .ob-progress-track { height:4px; background:var(--border); border-radius:999px; overflow:hidden; }
+    .ob-progress-fill { height:100%; background:linear-gradient(90deg,var(--primary),var(--diamond)); border-radius:999px; transition:width .4s cubic-bezier(.4,0,.2,1); }
+    .ob-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:1.8rem; margin-bottom:1.5rem; }
+    .ob-question { font-size:1.25rem; font-weight:700; margin-bottom:1.5rem; line-height:1.4; }
+    .ob-options { display:grid; gap:.75rem; }
+    .ob-opt { display:flex; align-items:center; gap:1rem; padding:1rem 1.2rem; background:var(--surface); border:2px solid var(--border); border-radius:var(--radius); cursor:pointer; transition:all .18s; text-align:left; width:100%; color:var(--text); }
+    .ob-opt:hover { border-color:var(--primary); background:var(--card-hover); transform:translateX(3px); }
+    .ob-opt.selected { border-color:var(--primary); background:rgba(124,124,248,.12); }
+    .ob-opt-emoji { font-size:1.6rem; flex-shrink:0; width:2.4rem; text-align:center; }
+    .ob-opt-text { flex:1; }
+    .ob-opt-title { font-weight:600; font-size:.95rem; }
+    .ob-opt-desc { font-size:.8rem; color:var(--text-muted); margin-top:.15rem; }
+    .ob-opt.selected .ob-opt-title { color:var(--primary-lt); }
+    .ob-nav { display:flex; gap:.75rem; margin-top:.5rem; }
+    .ob-nav .btn { flex:1; }
+    /* Level Result Screen */
+    .ob-result { text-align:center; }
+    .ob-result-level { font-size:5rem; font-weight:900; line-height:1; margin:1rem 0 .5rem; }
+    .ob-result-badge { display:inline-flex; align-items:center; gap:.4rem; padding:.4rem 1rem; border-radius:999px; font-size:1rem; font-weight:700; margin-bottom:1rem; }
+    .ob-result-desc { color:var(--text-muted); font-size:.9rem; margin-bottom:1.5rem; }
+    .ob-result-elo { font-size:.85rem; color:var(--text-dim); }
+    @keyframes obLevelIn { from { transform:scale(.6); opacity:0; } to { transform:scale(1); opacity:1; } }
+    .ob-result-level { animation:obLevelIn .5s cubic-bezier(.34,1.56,.64,1) both; }
+    @keyframes obSlideIn { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+    .ob-card { animation:obSlideIn .25s ease both; }
+
     /* AUTH */
     #auth-page { display:none; min-height:100vh; align-items:center; justify-content:center; padding:1.5rem; }
     .auth-wrap { width:100%; max-width:400px; }
@@ -262,6 +295,26 @@
       <div class="form-group"><label>E-Mail</label><input type="email" id="reg-email" placeholder="deine@email.de" autocomplete="email"></div>
       <div class="form-group"><label>Passwort <span style="color:var(--text-dim)">(min. 6 Zeichen)</span></label><input type="password" id="reg-pw" placeholder="••••••••" autocomplete="new-password"></div>
       <button class="btn btn-primary btn-full" id="btn-register" onclick="doRegister()">Konto erstellen</button>
+    </div>
+  </div>
+</div>
+
+<!-- ONBOARDING -->
+<div id="onboarding-page">
+  <div class="ob-wrap">
+    <div class="ob-logo">🏓 PingLeague</div>
+    <div class="ob-subtitle">Lass uns dein Level einschätzen – 4 kurze Fragen</div>
+    <div class="ob-progress-wrap">
+      <div class="ob-progress-label">
+        <span id="ob-step-label">Frage 1 von 4</span>
+        <span id="ob-pct-label">25%</span>
+      </div>
+      <div class="ob-progress-track"><div class="ob-progress-fill" id="ob-fill" style="width:25%"></div></div>
+    </div>
+    <div id="ob-content"></div>
+    <div class="ob-nav" id="ob-nav">
+      <button class="btn" id="ob-back-btn" onclick="obBack()" style="display:none">← Zurück</button>
+      <button class="btn btn-primary" id="ob-next-btn" onclick="obNext()" disabled>Weiter →</button>
     </div>
   </div>
 </div>
@@ -519,14 +572,15 @@ async function doRegister() {
   if (pw.length<6) { al.innerHTML='<div class="alert alert-error">Passwort muss min. 6 Zeichen haben.</div>'; return; }
   const btn=$el('btn-register'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Erstellen…';
   const {data,error} = await db.auth.signUp({email,password:pw});
-  if (error) { btn.disabled=false; btn.innerHTML='Konto erstellen'; al.innerHTML=`<div class="alert alert-error">${error.message}</div>`; return; }
-  if (data.user) {
-    await db.from('players').insert({user_id:data.user.id,name,club:club||null,elo:1200,matches:0,wins:0,losses:0,is_admin:false});
-  }
   btn.disabled=false; btn.innerHTML='Konto erstellen';
-  al.innerHTML = data.session
-    ? '<div class="alert alert-success">Willkommen! Du bist angemeldet.</div>'
-    : '<div class="alert alert-success">Konto erstellt! Bitte E-Mail bestätigen.</div>';
+  if (error) { al.innerHTML=`<div class="alert alert-error">${error.message}</div>`; return; }
+  if (data.user) {
+    // Store registration data, then start onboarding
+    OB.pendingUser = {id: data.user.id, name, club: club||null};
+    obStart();
+  } else {
+    al.innerHTML='<div class="alert alert-success">Konto erstellt! Bitte E-Mail bestätigen.</div>';
+  }
 }
 
 async function doLogout() { await db.auth.signOut(); }
@@ -990,9 +1044,149 @@ function showView(id) {
   else if(id==='stats'){renderStatsView();}
 }
 
+// ── ONBOARDING ────────────────────────────────────────────────────────────
+const OB = {
+  step: 0,
+  answers: [],
+  pendingUser: null  // {id, name, club}
+};
+
+const OB_QUESTIONS = [
+  {
+    q: 'Wie lange spielst du schon Tischtennis?',
+    opts: [
+      {e:'🆕', t:'Weniger als 1 Jahr',     d:'Ich fange gerade an',                pts:0},
+      {e:'📅', t:'1–3 Jahre',              d:'Ich kenne die Grundlagen',            pts:120},
+      {e:'🎯', t:'3–7 Jahre',              d:'Ich habe ordentlich Erfahrung',       pts:270},
+      {e:'🏆', t:'Mehr als 7 Jahre',       d:'Ich spiele schon sehr lange',         pts:420},
+    ]
+  },
+  {
+    q: 'Spielst du in einem Verein oder einer Liga?',
+    opts: [
+      {e:'🏠', t:'Nein, nur privat',       d:'Freizeit, Keller, Büro-TT',          pts:0},
+      {e:'🤝', t:'Ja, Freizeitgruppe',     d:'Regelmäßige Runden ohne Tabelle',    pts:90},
+      {e:'🏟️', t:'Ja, Vereinsliga',        d:'Kreis- oder Bezirksklasse',          pts:250},
+      {e:'⭐', t:'Ja, höhere Liga',        d:'Landes-/Bundesliga oder besser',     pts:450},
+    ]
+  },
+  {
+    q: 'Welche Techniken beherrschst du?',
+    opts: [
+      {e:'🎾', t:'Grundschläge',           d:'Vorhand & Rückhand push/drive',      pts:0},
+      {e:'🔄', t:'Topspin Vorhand',        d:'Ich kann aktiv angreifen',           pts:90},
+      {e:'💥', t:'Topspin beidseitig',     d:'Offensiv von beiden Seiten',         pts:200},
+      {e:'🚀', t:'Fortgeschrittene Technik',d:'Flick, Aufschlagvariationen, Konter',pts:330},
+    ]
+  },
+  {
+    q: 'Wie schätzt du dich selbst ein?',
+    opts: [
+      {e:'😊', t:'Einsteiger',             d:'Lerne noch und verliere oft',        pts:0},
+      {e:'💪', t:'Mittelfeld',             d:'Kann mich gegen die meisten wehren', pts:90},
+      {e:'🔥', t:'Fortgeschritten',        d:'Schlage die meisten Gegner',         pts:200},
+      {e:'🏆', t:'Turnierspieler',         d:'Nehme an Turnieren teil und gewinne',pts:330},
+    ]
+  }
+];
+
+function obCalcElo() {
+  const total = OB.answers.reduce((s, i, qi) => s + (OB_QUESTIONS[qi]?.opts[i]?.pts||0), 0);
+  return Math.min(1900, Math.max(900, 900 + total));
+}
+
+function obStart() {
+  OB.step = 0; OB.answers = [];
+  showPage('onboarding');
+  obRender();
+}
+
+function obRender() {
+  const total = OB_QUESTIONS.length;
+  const isResult = OB.step >= total;
+  const pct = isResult ? 100 : Math.round((OB.step + 1) / total * 100);
+  $el('ob-fill').style.width = pct + '%';
+  $el('ob-step-label').textContent = isResult ? 'Dein Level!' : `Frage ${OB.step+1} von ${total}`;
+  $el('ob-pct-label').textContent = pct + '%';
+  $el('ob-back-btn').style.display = OB.step > 0 ? '' : 'none';
+
+  if (isResult) {
+    const elo = obCalcElo();
+    const lvl = eloToLevel(elo);
+    const color = levelColor(lvl);
+    const label = levelLabel(lvl);
+    $el('ob-next-btn').textContent = '🚀 Los geht\'s!';
+    $el('ob-next-btn').disabled = false;
+    $el('ob-content').innerHTML = `
+      <div class="ob-card ob-result">
+        <div style="font-size:.9rem;color:var(--text-muted);margin-bottom:.5rem">Dein Start-Level</div>
+        <div class="ob-result-level" style="color:${color}">${lvl.toFixed(1)}</div>
+        <div class="ob-result-badge" style="background:${color}22;color:${color}">${label}</div>
+        <div class="ob-result-desc">Basierend auf deinen Antworten starten wir dich bei Level ${lvl.toFixed(1)}.<br>Dein Level ändert sich mit jedem Match automatisch.</div>
+        <div class="ob-result-elo">Start-Elo: ${elo}</div>
+      </div>`;
+  } else {
+    const q = OB_QUESTIONS[OB.step];
+    $el('ob-next-btn').textContent = OB.step === total - 1 ? 'Mein Level sehen →' : 'Weiter →';
+    $el('ob-next-btn').disabled = OB.answers[OB.step] === undefined;
+    $el('ob-content').innerHTML = `
+      <div class="ob-card">
+        <div class="ob-question">${q.q}</div>
+        <div class="ob-options">
+          ${q.opts.map((o,i)=>`
+            <button class="ob-opt${OB.answers[OB.step]===i?' selected':''}" onclick="obSelect(${i})">
+              <span class="ob-opt-emoji">${o.e}</span>
+              <span class="ob-opt-text">
+                <div class="ob-opt-title">${o.t}</div>
+                <div class="ob-opt-desc">${o.d}</div>
+              </span>
+            </button>`).join('')}
+        </div>
+      </div>`;
+  }
+}
+
+function obSelect(i) {
+  OB.answers[OB.step] = i;
+  document.querySelectorAll('.ob-opt').forEach((el,idx)=>el.classList.toggle('selected',idx===i));
+  $el('ob-next-btn').disabled = false;
+}
+
+function obNext() {
+  if (OB.step >= OB_QUESTIONS.length) { obFinish(); return; }
+  if (OB.answers[OB.step] === undefined) return;
+  OB.step++;
+  obRender();
+}
+
+function obBack() {
+  if (OB.step <= 0) return;
+  OB.step--;
+  obRender();
+}
+
+async function obFinish() {
+  const btn = $el('ob-next-btn');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Einrichten…';
+  const elo = obCalcElo();
+  const {id, name, club} = OB.pendingUser;
+  const {error} = await db.from('players').insert({user_id:id, name, club, elo, matches:0, wins:0, losses:0, is_admin:false});
+  if (error) { console.error(error); btn.disabled=false; btn.textContent="🚀 Los geht's!"; return; }
+  // Player created — now load the app (auth session should already be set)
+  _initialized = false;
+  const {data} = await withTimeout(db.auth.getSession(), 4000, {data:{session:null}});
+  if (data?.session?.user) {
+    _initialized = true;
+    await setupUser(data.session.user);
+  } else {
+    showPage('auth');
+  }
+}
+
 function showPage(p) {
   $el('loading').style.display='none';
   $el('auth-page').style.display=p==='auth'?'flex':'none';
+  $el('onboarding-page').style.display=p==='onboarding'?'flex':'none';
   $el('app-page').style.display=p==='app'?'block':'none';
 }
 
