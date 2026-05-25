@@ -582,6 +582,14 @@ function levelColor(lvl) {
   if (lvl >= 2.0) return 'var(--silver)';
   return 'var(--bronze)';
 }
+// Darker, saturated colours for filled circles (white text needs high contrast)
+function levelCircleColor(lvl) {
+  if (lvl >= 6.0) return '#0891b2'; // deep cyan
+  if (lvl >= 4.5) return '#2563eb'; // strong blue
+  if (lvl >= 3.5) return '#b45309'; // deep amber
+  if (lvl >= 2.0) return '#475569'; // slate
+  return '#92400e';                  // dark brown
+}
 function levelLabel(lvl) {
   if (lvl >= 6.0) return 'Elite';
   if (lvl >= 4.5) return 'Fortgeschritten';
@@ -1624,9 +1632,8 @@ async function renderProfileView() {
           </div>
         </div>
         <!-- Right: big level circle -->
-        <div style="flex-shrink:0;width:96px;height:96px;border-radius:50%;background:${col};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;box-shadow:0 0 24px ${col}55">
-          <div style="font-size:2.4rem;font-weight:900;line-height:1;color:#fff">${lvl.toFixed(1)}</div>
-          <div style="font-size:.55rem;font-weight:700;color:#fff;opacity:.85;text-transform:uppercase;letter-spacing:.06em;margin-top:.1rem">${levelLabel(lvl)}</div>
+        <div style="flex-shrink:0;width:96px;height:96px;border-radius:50%;background:${levelCircleColor(lvl)};display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px ${levelCircleColor(lvl)}88">
+          <div style="font-size:2.5rem;font-weight:900;line-height:1;color:#fff;letter-spacing:-.02em">${lvl.toFixed(1)}</div>
         </div>
       </div>
     </div>
