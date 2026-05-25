@@ -1618,6 +1618,9 @@ async function renderProfileView() {
             <div style="font-size:.82rem;cursor:pointer" onclick="document.getElementById('pv-elo-val').style.display='inline';document.getElementById('pv-elo-hidden').style.display='none'">
               <span style="color:var(--text-muted)">Elo</span> <span id="pv-elo-val" style="font-weight:700;display:none">${p.elo}</span><span id="pv-elo-hidden" style="color:var(--text-dim)"> anzeigen ▾</span>
             </div>
+            <div style="margin-top:.4rem">
+              <button class="btn btn-primary btn-sm" onclick="showView('match')" style="font-size:.78rem;padding:.3rem .8rem">➕ Match eintragen</button>
+            </div>
           </div>
         </div>
         <!-- Right: big level circle -->
