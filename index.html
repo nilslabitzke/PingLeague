@@ -602,11 +602,11 @@ async function setupUser(user) {
     }).catch(console.error);
 
   // Load all players — find current user's record in result (avoids separate filtered query)
-  await loadPlayers();
+  const playersLoaded = await loadPlayers();
   const pd = S.players.find(p => p.user_id === user.id) || null;
 
-  // No player record → new user who skipped / couldn't complete onboarding
-  if (!pd) {
+  // Only trigger onboarding if query succeeded AND genuinely no record exists
+  if (playersLoaded && !pd) {
     OB.pendingUser = {id: user.id, name: user.email.split('@')[0], club: null};
     obStart();
     return;
@@ -623,9 +623,10 @@ async function setupUser(user) {
 async function loadPlayers() {
   const res = await withTimeout(
     db.from('players').select('*').order('elo',{ascending:false}),
-    10000, {data:[], error:'timeout'}
+    10000, {data:null, error:'timeout'}
   );
-  if (!res.error) S.players = res.data || [];
+  if (res.data !== null && !res.error) { S.players = res.data || []; return true; }
+  return false; // timed out or error — don't trust the result
 }
 
 // ── RANKING ───────────────────────────────────────────────────────────────
@@ -1180,11 +1181,15 @@ async function obFinish() {
   const {id, name, club} = OB.pendingUser;
   const {error} = await db.from('players').insert({user_id:id, name, club, elo, matches:0, wins:0, losses:0, is_admin:false});
   if (error) {
-    console.error(error);
-    btn.disabled=false; btn.textContent="🚀 Los geht's!";
-    document.getElementById('ob-content').insertAdjacentHTML('beforeend',
-      `<div class="alert alert-error" style="margin-top:.75rem">Fehler beim Speichern: ${error.message}</div>`);
-    return;
+    // Unique violation = player already exists (e.g. from a previous session) → just proceed
+    if (error.code === '23505') { console.warn('Player already exists, skipping insert.'); }
+    else {
+      console.error(error);
+      btn.disabled=false; btn.textContent="🚀 Los geht's!";
+      document.getElementById('ob-content').insertAdjacentHTML('beforeend',
+        `<div class="alert alert-error" style="margin-top:.75rem">Fehler beim Speichern: ${error.message}</div>`);
+      return;
+    }
   }
   // Player created — load the app
   _initialized = false;
