@@ -348,7 +348,6 @@
         <button class="nav-btn active" data-view="profile" onclick="showView('profile')">Profil</button>
         <button class="nav-btn" data-view="ranking" onclick="showView('ranking')">Rangliste</button>
         <button class="nav-btn" data-view="match" onclick="showView('match')">Match</button>
-        <button class="nav-btn" data-view="stats" onclick="showView('stats')">Stats</button>
         <button class="nav-btn" data-view="challenges" onclick="showView('challenges')">⚔️ Challenges<span class="ch-badge" id="ch-badge-top"></span></button>
         <button class="nav-btn" data-view="admin" id="admin-nav" style="display:none" onclick="showView('admin')">Admin</button>
       </nav>
@@ -369,7 +368,6 @@
       <button class="bnav-btn active" data-view="profile" onclick="showView('profile')"><span class="bnav-icon">👤</span>Profil</button>
       <button class="bnav-btn" data-view="ranking" onclick="showView('ranking')"><span class="bnav-icon">🏆</span>Liga</button>
       <button class="bnav-btn" data-view="match" onclick="showView('match')"><span class="bnav-icon">➕</span>Match</button>
-      <button class="bnav-btn" data-view="stats" onclick="showView('stats')"><span class="bnav-icon">📊</span>Stats</button>
       <button class="bnav-btn" data-view="challenges" onclick="showView('challenges')"><span class="bnav-icon">⚔️</span>Challenge<span class="ch-badge" id="ch-badge-bottom"></span></button>
       <button class="bnav-btn" data-view="admin" id="bottom-admin-btn" style="display:none" onclick="showView('admin')"><span class="bnav-icon">⚙️</span>Admin</button>
     </div>
@@ -448,37 +446,14 @@
       </div>
     </div>
 
-    <!-- STATS -->
-    <div id="view-stats" class="view">
-      <div class="view-header"><h2>Statistiken</h2><p>Monatssieger · H2H · Formkurven</p></div>
-      <div class="stats-grid">
-        <!-- Monthly ranking -->
-        <div class="card">
-          <div class="card-title">📅 Monatsranking — <span id="month-name"></span></div>
-          <div id="monthly-list"><div class="text-muted" style="font-size:.88rem">Lade…</div></div>
-        </div>
-        <!-- H2H -->
-        <div class="card">
-          <div class="card-title">⚔️ Head-to-Head</div>
-          <div class="h2h-selects">
-            <select id="h2h-p1" onchange="loadH2HStats()"><option value="">Spieler 1</option></select>
-            <div class="h2h-vs">vs</div>
-            <select id="h2h-p2" onchange="loadH2HStats()"><option value="">Spieler 2</option></select>
-          </div>
-          <div id="h2h-result"></div>
-        </div>
-        <!-- Best performers -->
-        <div class="card" style="grid-column:1/-1">
-          <div class="card-title">🔥 Aktuelle Formkurve — letzte 5 Matches</div>
-          <div id="form-list"></div>
-        </div>
-      </div>
-    </div>
-
     <!-- CHALLENGES -->
     <div id="view-challenges" class="view">
       <div class="view-header"><h2>Herausforderungen</h2><p>Fordere Mitspieler zum Match heraus</p></div>
       <div style="display:flex;flex-direction:column;gap:1.25rem">
+        <div class="card" id="pending-matches-card" style="display:none">
+          <div class="card-title">⏳ Ausstehende Matches <span id="pm-badge" class="ch-badge" style="position:static;margin-left:.4rem;vertical-align:middle"></span></div>
+          <div id="pending-matches-list"><div class="text-muted" style="font-size:.85rem">Keine ausstehenden Matches.</div></div>
+        </div>
         <div class="card">
           <div class="card-title">🔍 Spieler herausfordern</div>
           <div class="form-group" style="margin-bottom:.5rem">
@@ -572,7 +547,7 @@ const SUPABASE_URL = 'https://xsxsyfaxhwrbllvvfxxm.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzeHN5ZmF4aHdyYmxsdnZmeHhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MTM1NzIsImV4cCI6MjA5NTE4OTU3Mn0.y35dDJTrkCNMU7P0V4H8iSMprITdRst9kl7B5_BMvc8';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storage:window.localStorage } });
 
-let S = { user:null, player:null, isAdmin:false, players:[], challenges:[], settings:{ k_high:32, k_low:16 } };
+let S = { user:null, player:null, isAdmin:false, players:[], challenges:[], pendingMatches:[], settings:{ k_high:32, k_low:16 } };
 
 // ── ELO & LEVEL ──────────────────────────────────────────────────────────
 function expected(ra, rb) { return 1 / (1 + Math.pow(10, (rb - ra) / 400)); }
@@ -846,7 +821,8 @@ async function setupUser(user) {
 
   applyPlayerData(pd, user);
   renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
-  loadChallenges(); // load badge in background
+  loadChallenges();      // load badge in background
+  loadPendingMatches();  // load pending match badge in background
   // Show profile tab first so the user lands on their own profile
   showView('profile');
 }
@@ -1240,29 +1216,52 @@ async function submitMatch() {
   const elo=calcElo(w.elo,l.elo,w.matches,l.matches);
   const btn=$el('btn-submit-match'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Speichern…';
   try {
-    // Single atomic DB call — all 3 writes happen in one transaction, no partial state possible
-    const {error} = await db.rpc('submit_match', {
-      p_winner_id:         wid,
-      p_loser_id:          lid,
-      p_sets:              sets,
-      p_elo_winner_before: w.elo,
-      p_elo_winner_after:  elo.wNew,
-      p_elo_loser_before:  l.elo,
-      p_elo_loser_after:   elo.lNew,
-      p_elo_delta:         elo.gain
-    });
-    if (error) throw error;
-    ['s1a','s1b','s2a','s2b','s3a','s3b'].forEach(id=>$el(id).value='');
-    ['s1-tag','s2-tag','s3-tag'].forEach(id=>{$el(id).textContent='';$el(id).className='set-tag';});
-    $el('set3-row').style.display='none'; $el('match-result-preview').innerHTML='';
-    $el('m-p2').value=''; $el('elo-preview').style.display='none';
-    toast(`✓ ${w.name} gewinnt +${elo.gain} Elo`,'success');
-    await loadPlayers(); renderRanking(); buildMatchSelects();
-    if(S.player) { S.player=byId(S.player.id)||S.player; }
-    // Refresh profile tab if open so stats update immediately
-    if ($el('view-profile').classList.contains('active')) renderProfileView();
+    if (S.isAdmin) {
+      // Admin path: direct, atomic, no confirmation needed
+      const {error} = await db.rpc('submit_match', {
+        p_winner_id:         wid,
+        p_loser_id:          lid,
+        p_sets:              sets,
+        p_elo_winner_before: w.elo,
+        p_elo_winner_after:  elo.wNew,
+        p_elo_loser_before:  l.elo,
+        p_elo_loser_after:   elo.lNew,
+        p_elo_delta:         elo.gain
+      });
+      if (error) throw error;
+      clearMatchForm();
+      toast(`✓ ${w.name} gewinnt +${elo.gain} Elo`,'success');
+      await loadPlayers(); renderRanking(); buildMatchSelects();
+      if(S.player) S.player=byId(S.player.id)||S.player;
+      if ($el('view-profile').classList.contains('active')) renderProfileView();
+    } else {
+      // Non-admin path: save as pending, opponent must confirm
+      const {error} = await db.rpc('submit_pending_match', {
+        p_winner_id:          wid,
+        p_loser_id:           lid,
+        p_sets:               sets,
+        p_elo_winner_before:  w.elo,
+        p_elo_winner_after:   elo.wNew,
+        p_elo_loser_before:   l.elo,
+        p_elo_loser_after:    elo.lNew,
+        p_elo_delta:          elo.gain
+      });
+      if (error) throw error;
+      clearMatchForm();
+      const opponent = wid === S.player?.id ? l : w;
+      toast(`⏳ Ergebnis gesendet — ${esc(opponent.name)} muss bestätigen`, 'info');
+      await loadPendingMatches();
+      updateChallengeBadge();
+    }
   } catch(err) { console.error(err); alEl.innerHTML=`<div class="alert alert-error">Fehler: ${err.message}</div>`; }
   btn.disabled=false; btn.innerHTML='Match eintragen';
+}
+
+function clearMatchForm() {
+  ['s1a','s1b','s2a','s2b','s3a','s3b'].forEach(id=>$el(id).value='');
+  ['s1-tag','s2-tag','s3-tag'].forEach(id=>{$el(id).textContent='';$el(id).className='set-tag';});
+  $el('set3-row').style.display='none'; $el('match-result-preview').innerHTML='';
+  $el('m-p2').value=''; $el('elo-preview').style.display='none';
 }
 
 // ── HISTORY ───────────────────────────────────────────────────────────────
@@ -1347,12 +1346,85 @@ async function loadChallenges() {
   updateChallengeBadge();
 }
 
+async function loadPendingMatches() {
+  if (!S.player) return;
+  const { data } = await withTimeout(
+    db.from('pending_matches').select('*')
+      .or(`winner_id.eq.${S.player.id},loser_id.eq.${S.player.id}`)
+      .order('created_at', { ascending: false }),
+    8000, { data: null }
+  );
+  S.pendingMatches = data || [];
+  updateChallengeBadge();
+}
+
 function updateChallengeBadge() {
-  const count = S.challenges.filter(c => c.challenged_id === S.player?.id).length;
-  const val = count > 0 ? String(count) : '';
+  // Count: incoming challenges + matches waiting for MY confirmation
+  const incomingChallenges = S.challenges.filter(c => c.challenged_id === S.player?.id).length;
+  const pendingConfirm = S.pendingMatches.filter(m =>
+    m.submitted_by !== S.user?.id &&
+    (m.winner_id === S.player?.id || m.loser_id === S.player?.id)
+  ).length;
+  const total = incomingChallenges + pendingConfirm;
+  const val = total > 0 ? String(total) : '';
   ['ch-badge-top', 'ch-badge-bottom'].forEach(id => {
     const el = $el(id); if (el) el.textContent = val;
   });
+}
+
+async function confirmPendingMatch(matchId) {
+  const { error } = await db.rpc('confirm_pending_match', { p_match_id: matchId });
+  if (error) { toast(`Fehler: ${error.message}`, 'error'); return; }
+  toast('Match bestätigt ✓ Elo aktualisiert!', 'success');
+  await Promise.all([loadPendingMatches(), loadPlayers()]);
+  renderRanking(); buildMatchSelects();
+  if(S.player) S.player = byId(S.player.id) || S.player;
+  if ($el('view-profile').classList.contains('active')) renderProfileView();
+  if ($el('view-challenges').classList.contains('active')) renderPendingMatchesSection();
+}
+
+async function rejectPendingMatch(matchId) {
+  const { error } = await db.rpc('reject_pending_match', { p_match_id: matchId });
+  if (error) { toast(`Fehler: ${error.message}`, 'error'); return; }
+  toast('Match abgelehnt.', 'info');
+  await loadPendingMatches();
+  if ($el('view-challenges').classList.contains('active')) renderPendingMatchesSection();
+}
+
+function renderPendingMatchesSection() {
+  const card = $el('pending-matches-card');
+  const list = $el('pending-matches-list');
+  const badge = $el('pm-badge');
+  if (!card || !list) return;
+
+  const pm = S.pendingMatches;
+  card.style.display = pm.length ? '' : 'none';
+  if (badge) badge.textContent = pm.length > 0 ? String(pm.length) : '';
+  if (!pm.length) return;
+
+  list.innerHTML = pm.map(m => {
+    const winner = byId(m.winner_id), loser = byId(m.loser_id);
+    const isMySubmission = m.submitted_by === S.user?.id;
+    const needsMyConfirm = !isMySubmission && (m.winner_id === S.player?.id || m.loser_id === S.player?.id);
+    const sets = (m.sets||[]).map(s=>`<span class="set-chip">${s.p1??'?'}:${s.p2??'?'}</span>`).join('');
+    return `<div class="challenge-card" style="flex-wrap:wrap;gap:.75rem">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.85rem;font-weight:600;margin-bottom:.2rem">
+          <span style="color:var(--success)">${winner?esc(winner.name):'?'}</span>
+          <span style="color:var(--text-muted);margin:0 .3rem">vs</span>
+          <span style="color:var(--error)">${loser?esc(loser.name):'?'}</span>
+        </div>
+        <div style="display:flex;gap:.3rem;flex-wrap:wrap;margin-bottom:.2rem">${sets}</div>
+        <div style="font-size:.75rem;color:var(--text-muted)">${fmtAgo(m.created_at)} · ${isMySubmission?'⏳ Warte auf Bestätigung':'❗ Bestätigung ausstehend'}</div>
+      </div>
+      <div style="display:flex;gap:.4rem;align-items:center;flex-shrink:0">
+        ${needsMyConfirm
+          ? `<button class="btn btn-success btn-sm" onclick="confirmPendingMatch('${m.id}')">✓ Bestätigen</button>
+             <button class="btn btn-danger btn-sm" onclick="rejectPendingMatch('${m.id}')">✕ Ablehnen</button>`
+          : `<button class="btn btn-secondary btn-sm" onclick="rejectPendingMatch('${m.id}')">Zurückziehen</button>`}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 async function sendChallenge(targetPlayerId) {
@@ -1482,8 +1554,24 @@ function showView(id) {
   if(id==='profile'){renderProfileView();}
   else if(id==='ranking'){loadPlayers().then(renderRanking);}
   else if(id==='admin'){renderAdminPlayers();}
-  else if(id==='stats'){renderStatsView();}
-  else if(id==='challenges'){loadChallenges().then(renderChallengesView);}
+  else if(id==='challenges'){
+    Promise.all([loadChallenges(), loadPendingMatches()]).then(()=>{
+      renderChallengesView();
+      renderPendingMatchesSection();
+    });
+  }
+}
+
+function toggleProfileStats() {
+  const body = $el('pv-stats-body');
+  const arrow = $el('pv-stats-arrow');
+  const isOpen = body.style.display !== 'none';
+  body.style.display = isOpen ? 'none' : 'block';
+  arrow.textContent = isOpen ? '▶' : '▼';
+  if (!isOpen) {
+    buildH2HSelects();
+    renderStatsView();
+  }
 }
 
 function toggleRankingHistory() {
@@ -1532,9 +1620,30 @@ async function renderProfileView() {
       <div class="card-title">Level-Verlauf</div>
       <div class="chart-wrap" id="pv-chart"><div class="text-muted text-center" style="font-size:.88rem">Lade Chart…</div></div>
     </div>
-    <div class="card">
+    <div class="card" style="margin-bottom:1rem">
       <div class="card-title">Letzte Matches</div>
       <div id="pv-matches"><div class="text-muted" style="font-size:.88rem">Lade…</div></div>
+    </div>
+    <div class="card" id="pv-stats-card">
+      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleProfileStats()">
+        <div class="card-title" style="margin-bottom:0">📊 Statistiken</div>
+        <span id="pv-stats-arrow" style="color:var(--text-muted);font-size:.9rem">▶</span>
+      </div>
+      <div id="pv-stats-body" style="display:none;margin-top:1rem">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
+          <div style="font-size:.82rem;font-weight:600;color:var(--text-muted)">📅 Monatsranking — <span id="month-name"></span></div>
+        </div>
+        <div id="monthly-list"><div class="text-muted" style="font-size:.88rem">Lade…</div></div>
+        <div style="margin-top:1rem;margin-bottom:.5rem;font-size:.82rem;font-weight:600;color:var(--text-muted)">⚔️ Head-to-Head</div>
+        <div class="h2h-selects">
+          <select id="h2h-p1" onchange="loadH2HStats()"><option value="">Spieler 1</option></select>
+          <div class="h2h-vs">vs</div>
+          <select id="h2h-p2" onchange="loadH2HStats()"><option value="">Spieler 2</option></select>
+        </div>
+        <div id="h2h-result"></div>
+        <div style="margin-top:1rem;margin-bottom:.5rem;font-size:.82rem;font-weight:600;color:var(--text-muted)">🔥 Formkurve — letzte 5 Matches</div>
+        <div id="form-list"></div>
+      </div>
     </div>`;
 
   // Load chart + recent matches async
