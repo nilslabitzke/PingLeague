@@ -368,8 +368,8 @@
       <div id="month-banner-wrap"></div>
       <div class="ranking-table-wrapper">
         <table>
-          <thead><tr><th style="width:44px">#</th><th>Spieler</th><th>Level</th><th>Elo</th><th>Form</th><th>S / N</th><th>Matches</th></tr></thead>
-          <tbody id="ranking-tbody"><tr><td colspan="7" class="text-center text-muted" style="padding:2rem">Lade…</td></tr></tbody>
+          <thead><tr><th style="width:44px">#</th><th>Spieler</th><th>Level</th><th>Form</th><th>S / N</th><th>Matches</th></tr></thead>
+          <tbody id="ranking-tbody"><tr><td colspan="6" class="text-center text-muted" style="padding:2rem">Lade…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -659,7 +659,7 @@ async function doRegister() {
   if (error) { al.innerHTML=`<div class="alert alert-error">${error.message}</div>`; return; }
   if (data.user) {
     // Store registration data, then start onboarding
-    OB.pendingUser = {id: data.user.id, name, club: club||null};
+    OB.pendingUser = {id: data.user.id, name, club: club||null, email};
     obStart();
   } else {
     al.innerHTML='<div class="alert alert-success">Konto erstellt! Bitte E-Mail bestätigen.</div>';
@@ -758,7 +758,7 @@ async function setupUser(user) {
   const pd = S.players.find(p => p.user_id === user.id) || null;
 
   if (playersLoaded && !pd) {
-    OB.pendingUser = {id: user.id, name: user.email.split('@')[0], club: null};
+    OB.pendingUser = {id: user.id, name: user.email.split('@')[0], club: null, email: user.email};
     obStart(); return;
   }
 
@@ -787,7 +787,7 @@ function renderRanking() {
   updateLastUpdated();
 
   const tbody=$el('ranking-tbody');
-  if (!S.players.length) { tbody.innerHTML='<tr><td colspan="7" class="text-center text-muted" style="padding:2rem">Noch keine Spieler.</td></tr>'; return; }
+  if (!S.players.length) { tbody.innerHTML='<tr><td colspan="6" class="text-center text-muted" style="padding:2rem">Noch keine Spieler.</td></tr>'; return; }
 
   // ── Render rows instantly (no DB calls, no waiting) ───────────────────
   tbody.innerHTML = S.players.map((p,i) => {
@@ -800,7 +800,6 @@ function renderRanking() {
         <div><div class="player-name">${esc(p.name)}${isMe?' <span class="me-tag">(du)</span>':''}</div>${p.club?`<div class="player-club">${esc(p.club)}</div>`:''}</div>
       </div></td>
       <td><span class="level-badge" style="color:${col};background:${col}18">${lvl.toFixed(1)} <span style="font-size:.68rem;opacity:.7">${levelLabel(lvl)}</span></span></td>
-      <td><span class="elo-val" style="color:${col}">${p.elo}</span></td>
       <td><div class="form-dots" id="fdots-${p.id}"></div></td>
       <td>${p.wins} / ${p.losses}</td>
       <td>${p.matches}</td>
@@ -872,6 +871,7 @@ async function openProfile(playerId) {
     <div>
       <div class="profile-name">${esc(p.name)}</div>
       ${p.club?`<div class="profile-club">🏟 ${esc(p.club)}</div>`:''}
+      ${p.email?`<div class="profile-club" style="color:var(--text-dim);font-size:.78rem">✉ ${esc(p.email)}</div>`:''}
       <div class="profile-badges">
         <button class="level-badge" style="color:${col};background:${col}22;border:none;cursor:pointer;font-size:.78rem;" title="Tippe für Elo" onclick="const s=this.nextElementSibling;s.style.display=s.style.display==='inline'?'none':'inline'">${lvl.toFixed(1)} ${levelLabel(lvl)} ▾</button>
         <span style="font-size:.78rem;color:var(--text-muted);display:none">Elo ${p.elo}</span>
@@ -1406,8 +1406,8 @@ async function obFinish() {
   // ── New player mode: create player record ────────────────────────────
   btn.innerHTML = '<span class="spinner"></span> Einrichten…';
   const elo = obCalcElo();
-  const {id, name, club} = OB.pendingUser;
-  const {error} = await db.from('players').insert({user_id:id, name, club, elo, matches:0, wins:0, losses:0, is_admin:false});
+  const {id, name, club, email} = OB.pendingUser;
+  const {error} = await db.from('players').insert({user_id:id, name, club, email: email||null, elo, matches:0, wins:0, losses:0, is_admin:false});
   if (error) {
     // Unique violation = player already exists (e.g. from a previous session) → just proceed
     if (error.code === '23505') { console.warn('Player already exists, skipping insert.'); }
