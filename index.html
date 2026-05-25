@@ -525,6 +525,7 @@ function withTimeout(promise, ms, fallback) {
 }
 // ── PLAYER CACHE (localStorage) ───────────────────────────────────────────
 const PL_CACHE = 'pl_v1';
+const AUTO_REFRESH_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
 function getCachedPlayers() {
   try { const c=JSON.parse(localStorage.getItem(PL_CACHE)||'null'); return c?.data||null; } catch(e){return null;}
 }
@@ -537,10 +538,23 @@ function setCachedPlayers(data) {
 function updateLastUpdated() {
   const el=$el('ranking-last-updated'); if(!el) return;
   const ts=getCachedTs(); if(!ts){el.textContent='';return;}
-  const diff=Math.round((Date.now()-ts)/60000);
-  if(diff<1) el.textContent='Zuletzt aktualisiert: gerade eben';
-  else if(diff<60) el.textContent=`Zuletzt aktualisiert: vor ${diff} Minute${diff!==1?'n':''}`;
-  else { const d=new Date(ts); el.textContent=`Zuletzt aktualisiert: ${d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})} Uhr`; }
+  const diffMin=Math.round((Date.now()-ts)/60000);
+  const diffDays=Math.floor((Date.now()-ts)/86400000);
+  if(diffMin<1) el.textContent='Zuletzt aktualisiert: gerade eben';
+  else if(diffMin<60) el.textContent=`Zuletzt aktualisiert: vor ${diffMin} Minute${diffMin!==1?'n':''}`;
+  else if(diffDays<1) { const d=new Date(ts); el.textContent=`Zuletzt aktualisiert: ${d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'})} Uhr`; }
+  else el.textContent=`Zuletzt aktualisiert: vor ${diffDays} Tag${diffDays!==1?'en':''}`;
+}
+
+// ── AUTO-REFRESH (wöchentlich) ────────────────────────────────────────────
+async function autoRefreshIfStale() {
+  if (!S.user) return;
+  const ts = getCachedTs();
+  if (!ts || Date.now() - ts > AUTO_REFRESH_MS) {
+    console.log('Auto-Refresh: Daten älter als 1 Woche, lade neu…');
+    const ok = await loadPlayers();
+    if (ok) { renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects(); }
+  }
 }
 function byId(id) { return S.players.find(p => p.id === id); }
 function $el(id) { return document.getElementById(id); }
@@ -1313,6 +1327,14 @@ function init() {
   $el('login-pw').addEventListener('keydown',e=>e.key==='Enter'&&doLogin());
   $el('login-email').addEventListener('keydown',e=>e.key==='Enter'&&doLogin());
   $el('reg-pw').addEventListener('keydown',e=>e.key==='Enter'&&doRegister());
+
+  // Auto-Refresh: wenn Tab wieder sichtbar wird, prüfen ob Daten veraltet sind
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) autoRefreshIfStale();
+  });
+
+  // Auto-Refresh: stündlicher Wächter (für lange offene Tabs)
+  setInterval(autoRefreshIfStale, 60 * 60 * 1000);
 }
 init();
 </script>
