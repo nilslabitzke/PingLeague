@@ -1601,18 +1601,20 @@ async function renderProfileView() {
   const rank = S.players.findIndex(pl => pl.id === p.id) + 1;
 
   container.innerHTML = `
-    <div class="card" style="margin-bottom:1rem">
-      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
-        <div class="profile-avatar-lg" style="background:${ac}22;color:${ac};flex-shrink:0">${initials(p.name)}</div>
-        <div style="flex:1;min-width:0">
-          <div style="font-size:1.15rem;font-weight:700;margin-bottom:.2rem">${esc(p.name)}</div>
-          ${fmtClub(p)?`<div style="font-size:.82rem;color:var(--text-muted);margin-bottom:.3rem">🏟 ${esc(fmtClub(p))}</div>`:''}
-          <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap">
-            <span class="level-badge" style="color:${col};background:${col}22;cursor:pointer;font-size:.85rem" onclick="const s=document.getElementById('pv-elo-hint');s.style.display=s.style.display==='inline'?'none':'inline'">${lvl.toFixed(1)} ${levelLabel(lvl)} ▾</span>
-            <span id="pv-elo-hint" style="font-size:.78rem;color:var(--text-muted);display:none">Elo ${p.elo}</span>
-            ${rank>0?`<span style="font-size:.78rem;color:var(--text-dim)">Platz ${rank} in der Liga</span>`:''}
-          </div>
+    <div class="card" style="margin-bottom:1rem;text-align:center;padding:1.75rem 1rem 1.5rem">
+      <div style="font-size:4.5rem;font-weight:900;line-height:1;color:${col};letter-spacing:-.02em;margin-bottom:.25rem">${lvl.toFixed(1)}</div>
+      <div style="font-size:1rem;font-weight:600;color:${col};opacity:.85;margin-bottom:1rem;letter-spacing:.04em;text-transform:uppercase">${levelLabel(lvl)}</div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:.75rem;margin-bottom:.5rem">
+        <div class="profile-avatar-lg" style="background:${ac}22;color:${ac};width:44px;height:44px;font-size:1.1rem">${initials(p.name)}</div>
+        <div style="text-align:left">
+          <div style="font-size:1.05rem;font-weight:700">${esc(p.name)}</div>
+          ${fmtClub(p)?`<div style="font-size:.78rem;color:var(--text-muted)">🏟 ${esc(fmtClub(p))}</div>`:''}
         </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:.75rem;flex-wrap:wrap;margin-top:.5rem">
+        ${rank>0?`<span style="font-size:.78rem;color:var(--text-dim);background:var(--surface);padding:.2rem .6rem;border-radius:999px">Platz ${rank} in der Liga</span>`:''}
+        <span id="pv-elo-hint-toggle" style="font-size:.78rem;color:var(--text-dim);background:var(--surface);padding:.2rem .6rem;border-radius:999px;cursor:pointer" onclick="const s=document.getElementById('pv-elo-val');s.style.display=s.style.display==='none'?'inline':'none';this.style.display='none'">Elo anzeigen</span>
+        <span id="pv-elo-val" style="font-size:.78rem;color:var(--text-muted);display:none">Elo ${p.elo}</span>
       </div>
     </div>
     <div class="profile-stats-grid card" style="margin-bottom:1rem">
