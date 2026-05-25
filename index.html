@@ -534,24 +534,27 @@ async function doLogout() { await db.auth.signOut(); }
 // ── SETUP ─────────────────────────────────────────────────────────────────
 async function setupUser(user) {
   S.user = user;
-  // Fetch player profile + settings with 8s timeout each — never block app startup
-  const [pdRes, sdRes] = await Promise.all([
-    withTimeout(db.from('players').select('*').eq('user_id',user.id).maybeSingle(), 8000, {data:null,error:'timeout'}),
-    withTimeout(db.from('settings').select('*').limit(1).maybeSingle(), 8000, {data:null,error:'timeout'})
-  ]);
-  const pd = pdRes?.data ?? null;
-  const sd = sdRes?.data ?? null;
-  S.player=pd; S.isAdmin=pd?.is_admin||false;
-  if (sd) { S.settings={k_high:sd.k_high||32,k_low:sd.k_low||16}; $el('k-high').value=S.settings.k_high; $el('k-low').value=S.settings.k_low; }
-  $el('header-user-name').textContent=pd?.name||user.email;
-  $el('admin-nav').style.display = S.isAdmin?'':'none';
-  $el('bottom-admin-btn').style.display = S.isAdmin?'':'none';
-  buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
+  // Show app immediately — no waiting
+  $el('header-user-name').textContent = user.email;
+  $el('admin-nav').style.display = 'none';
+  $el('bottom-admin-btn').style.display = 'none';
   showPage('app');
-  // Load ranking in background
-  loadPlayers().then(() => {
-    renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
-  }).catch(e => console.error('loadPlayers:', e));
+
+  // Load settings in background (non-blocking)
+  withTimeout(db.from('settings').select('*').limit(1).maybeSingle(), 5000, {data:null})
+    .then(r => {
+      const sd = r?.data;
+      if (sd) { S.settings={k_high:sd.k_high||32,k_low:sd.k_low||16}; $el('k-high').value=S.settings.k_high; $el('k-low').value=S.settings.k_low; }
+    }).catch(console.error);
+
+  // Load all players — find current user's record in result (avoids separate filtered query)
+  await loadPlayers();
+  const pd = S.players.find(p => p.user_id === user.id) || null;
+  S.player = pd; S.isAdmin = pd?.is_admin || false;
+  $el('header-user-name').textContent = pd?.name || user.email;
+  $el('admin-nav').style.display = S.isAdmin ? '' : 'none';
+  $el('bottom-admin-btn').style.display = S.isAdmin ? '' : 'none';
+  renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
 }
 
 // ── DATA ──────────────────────────────────────────────────────────────────
@@ -996,47 +999,29 @@ function showPage(p) {
 // ── INIT ──────────────────────────────────────────────────────────────────
 let _initialized=false;
 
-// Nuclear fallback: no matter what, clear loading after 5s
+// Nuclear fallback: always clear loading after 6s no matter what
 setTimeout(()=>{
   if(document.getElementById('loading').style.display!=='none'){
-    console.warn('Nuclear fallback triggered');
+    console.warn('Fallback triggered');
+    _initialized=true;
     showPage(S.user?'app':'auth');
   }
-},5000);
+},6000);
 
-async function init() {
-  // Runtime-only: handle sign-out and token refresh after initial load
+function init() {
+  // INITIAL_SESSION fires instantly from localStorage (no network) — fastest possible load
   db.auth.onAuthStateChange(async(event,session)=>{
     if(event==='SIGNED_OUT'){
       S.user=null;S.player=null;S.isAdmin=false;_initialized=false;showPage('auth');
-    } else if(session?.user&&(event==='SIGNED_IN'||event==='TOKEN_REFRESHED')){
-      if(!_initialized){
+    } else if(event==='INITIAL_SESSION'||event==='SIGNED_IN'||event==='TOKEN_REFRESHED'){
+      if(session?.user&&!_initialized){
         _initialized=true;
         try{await setupUser(session.user);}catch(e){console.error(e);showPage('auth');}
-      } else if(S.user?.id!==session.user.id){
-        _initialized=true;
-        try{await setupUser(session.user);}catch(e){console.error(e);showPage('auth');}
+      } else if(!session?.user&&event==='INITIAL_SESSION'&&!_initialized){
+        _initialized=true; showPage('auth');
       }
     }
   });
-
-  // Primary path: getSession() is fast (reads localStorage), always resolves quickly
-  try {
-    const {data,error} = await withTimeout(db.auth.getSession(), 4000, {data:{session:null},error:'timeout'});
-    if(error && error!=='timeout') console.error(error);
-    const session = data?.session;
-    if(!_initialized){
-      _initialized=true;
-      if(session?.user){
-        try{await setupUser(session.user);}catch(e){console.error(e);showPage('auth');}
-      } else {
-        showPage('auth');
-      }
-    }
-  } catch(err){
-    console.error(err);
-    if(!_initialized){_initialized=true;showPage('auth');}
-  }
 
   $el('login-pw').addEventListener('keydown',e=>e.key==='Enter'&&doLogin());
   $el('login-email').addEventListener('keydown',e=>e.key==='Enter'&&doLogin());
