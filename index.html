@@ -819,6 +819,7 @@ function fmtDate(iso) {
          d.toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});
 }
 function fmtMonth(d) { return d.toLocaleDateString('de-DE',{month:'long',year:'numeric'}); }
+function fmtDateShort(d) { if (!d) return ''; const dt=d instanceof Date?d:new Date(d); return dt.toLocaleDateString('de-DE',{day:'numeric',month:'short'}); }
 function esc(s) { return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]); }
 
 // ── TOAST ─────────────────────────────────────────────────────────────────
@@ -1051,6 +1052,29 @@ function buildFormDots(playerId, matches) {
   return pm.map(m=>`<span class="fdot ${m.winner_id===playerId?'w':'l'}" title="${m.winner_id===playerId?'Sieg':'Niederlage'}"></span>`).join('');
 }
 
+// Computes form trend from the loadPlayerEloHistory result
+function computeFormTrend(histData) {
+  if (!histData || histData.length < 3) return null;
+  // Last up to 5 matches: take last 6 data points (first is "before" anchor, rest are results)
+  const tail = histData.slice(-6);
+  const eloDelta = Math.round(tail[tail.length-1].elo - tail[0].elo);
+  const recentMatches = tail.slice(1);
+  const wins   = recentMatches.filter(p=>p.win===true).length;
+  const losses = recentMatches.filter(p=>p.win===false).length;
+  const n = wins + losses;
+  if (!n) return null;
+  // Current streak (from end backwards, skipping null win at index 0)
+  let streak = 0, streakWin = null;
+  for (let i = histData.length-1; i >= 1; i--) {
+    const w = histData[i].win;
+    if (w === null) break;
+    if (streakWin === null) { streakWin = w; streak = 1; }
+    else if (w === streakWin) streak++;
+    else break;
+  }
+  return { eloDelta, wins, losses, n, streak, streakWin };
+}
+
 async function renderMonthBanner() {
   const now=new Date(), startOfMonth=new Date(now.getFullYear(),now.getMonth(),1);
   const res = await withTimeout(
@@ -1192,40 +1216,65 @@ async function loadPlayerEloHistory(playerId) {
   if (!data?.length) return [];
   const pts=[];
   const first=data[0];
-  pts.push({elo:first.winner_id===playerId?first.elo_winner_before:first.elo_loser_before, win:null});
+  pts.push({elo:first.winner_id===playerId?first.elo_winner_before:first.elo_loser_before, win:null, date:new Date(first.created_at)});
   for (const m of data) {
     const win=m.winner_id===playerId;
-    pts.push({elo:win?m.elo_winner_after:m.elo_loser_after, win});
+    pts.push({elo:win?m.elo_winner_after:m.elo_loser_after, win, date:new Date(m.created_at)});
   }
   return pts;
 }
 
 function renderEloChart(pts) {
-  if (pts.length<2) return '<p class="text-muted text-center" style="font-size:.85rem;padding:.5rem">Noch zu wenige Matches für einen Verlauf.</p>';
-  const W=480,H=140,pl=48,pr=16,pt=16,pb=24,iW=W-pl-pr,iH=H-pt-pb;
-  const elos=pts.map(p=>p.elo);
-  const minE=Math.min(...elos)-20, maxE=Math.max(...elos)+20, range=maxE-minE||1;
-  const cx=i=>pl+(i/(pts.length-1))*iW;
-  const cy=e=>pt+iH-((e-minE)/range)*iH;
-  const poly=pts.map((p,i)=>`${cx(i)},${cy(p.elo)}`).join(' ');
-  const area=[`${pl},${pt+iH}`, ...pts.map((p,i)=>`${cx(i)},${cy(p.elo)}`), `${pl+iW},${pt+iH}`].join(' ');
-  const steps=Math.ceil(range/4/50)*50||50;
-  const labels=[];
-  for(let e=Math.ceil(minE/steps)*steps;e<=maxE;e+=steps) labels.push({e,y:cy(e)});
-  const dots=pts.slice(1).map((p,i)=>({x:cx(i+1),y:cy(p.elo),w:p.win}));
+  if (pts.length < 2) return '<p class="text-muted text-center" style="font-size:.85rem;padding:.5rem">Noch zu wenige Matches für einen Verlauf.</p>';
+  const W=480, H=168, pl=38, pr=18, pt=14, pb=26, iW=W-pl-pr, iH=H-pt-pb;
+  const elos = pts.map(p=>p.elo);
+  const minE = Math.min(...elos)-30, maxE = Math.max(...elos)+30, range = maxE-minE||1;
+  const cx = i => pl + (i/(pts.length-1))*iW;
+  const cy = e => pt + iH - ((e-minE)/range)*iH;
+  const poly = pts.map((p,i)=>`${cx(i).toFixed(1)},${cy(p.elo).toFixed(1)}`).join(' ');
+  const area = [`${pl},${(pt+iH).toFixed(1)}`, ...pts.map((p,i)=>`${cx(i).toFixed(1)},${cy(p.elo).toFixed(1)}`), `${(pl+iW).toFixed(1)},${(pt+iH).toFixed(1)}`].join(' ');
+  // Y-axis: Level gridlines
+  const eloForLvl = l => 1000 + (l-0.5)/6.5*1000;
+  const allLvlLines = [];
+  for (let l=0.5; l<=7.0; l+=0.5) {
+    const e=eloForLvl(l);
+    if (e>=minE&&e<=maxE) allLvlLines.push({l,y:cy(e)});
+  }
+  // Thin out if too many
+  const lvlStep = allLvlLines.length > 6 ? 2 : 1;
+  const lvlLines = allLvlLines.filter((_,i)=>i%lvlStep===0);
+  // X-axis: date labels (first, mid, last)
+  const dateIdxs = [...new Set([0, Math.floor((pts.length-1)/2), pts.length-1])];
+  const dateLabels = pts[0]?.date instanceof Date
+    ? dateIdxs.map(i=>({x:cx(i), label:fmtDateShort(pts[i].date)}))
+    : [];
+  // Dots (skip idx 0 = starting Elo)
+  const dots = pts.slice(1).map((p,i)=>({x:cx(i+1), y:cy(p.elo), w:p.win}));
+  // Current level label near last dot
+  const last = pts[pts.length-1];
+  const lastX = cx(pts.length-1), lastY = cy(last.elo);
+  const lastLvl = eloToLevel(last.elo);
+  const labelY = Math.max(pt+11, lastY-8);
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
-    <defs><linearGradient id="eg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="var(--primary)" stop-opacity=".25"/><stop offset="100%" stop-color="var(--primary)" stop-opacity="0"/></linearGradient></defs>
-    ${labels.map(l=>`<line x1="${pl}" y1="${l.y}" x2="${W-pr}" y2="${l.y}" stroke="var(--border)" stroke-width="1"/>
-      <text x="${pl-6}" y="${l.y+4}" text-anchor="end" font-size="9" fill="var(--text-muted)">${l.e}</text>`).join('')}
+    <defs>
+      <linearGradient id="eg" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="var(--primary)" stop-opacity=".28"/>
+        <stop offset="100%" stop-color="var(--primary)" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    ${lvlLines.map(l=>`<line x1="${pl}" y1="${l.y.toFixed(1)}" x2="${W-pr}" y2="${l.y.toFixed(1)}" stroke="var(--border)" stroke-width="1"/>
+      <text x="${pl-4}" y="${(l.y+3.5).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--text-muted)">${l.l.toFixed(1)}</text>`).join('')}
+    ${dateLabels.map(d=>`<text x="${d.x.toFixed(1)}" y="${H-4}" text-anchor="middle" font-size="9" fill="var(--text-dim)">${d.label}</text>`).join('')}
     <polygon points="${area}" fill="url(#eg)"/>
-    <polyline points="${poly}" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linejoin="round"/>
-    ${dots.map(d=>`<circle cx="${d.x}" cy="${d.y}" r="3.5" fill="${d.w===null?'var(--primary)':d.w?'var(--success)':'var(--error)'}" stroke="var(--card)" stroke-width="1.5"/>`).join('')}
+    <polyline points="${poly}" fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+    ${dots.map(d=>`<circle cx="${d.x.toFixed(1)}" cy="${d.y.toFixed(1)}" r="3" fill="${d.w===null?'var(--primary)':d.w?'var(--success)':'var(--error)'}" stroke="var(--card)" stroke-width="1.5"/>`).join('')}
+    <text x="${lastX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--primary-lt)">${lastLvl.toFixed(1)}</text>
   </svg>`;
 }
 
 // ── STATS VIEW ────────────────────────────────────────────────────────────
 async function renderStatsView() {
-  if (!$el('month-name')) return; // stats section not yet expanded/rendered
+  if (!$el('month-name')) return; // stats section not yet in DOM (profile not open)
   $el('month-name').textContent = fmtMonth(new Date());
   const now=new Date(), som=new Date(now.getFullYear(),now.getMonth(),1);
   const {data:mData} = await withTimeout(
@@ -2128,7 +2177,8 @@ async function renderProfileView() {
             ${rank>0?`<div style="font-size:.82rem"><span style="color:var(--text-muted)">Platz in der Liga</span> <span style="font-weight:700">${rank}</span></div>`:''}
             <div style="font-size:.82rem"><span style="color:var(--text-muted)">Matches</span> <span style="font-weight:700">${p.matches}</span></div>
             <div style="font-size:.82rem"><span style="color:var(--text-muted)">Elo</span> <span style="font-weight:700">${p.elo}</span></div>
-            <div style="margin-top:.4rem">
+            <div id="pv-form-indicator" style="min-height:1.2rem"></div>
+            <div style="margin-top:.35rem">
               <button class="btn btn-primary btn-sm" onclick="showView('match')" style="font-size:.78rem;padding:.3rem .8rem">➕ Match eintragen</button>
             </div>
           </div>
@@ -2139,41 +2189,57 @@ async function renderProfileView() {
         </div>
       </div>
     </div>
-    <div class="profile-stats-grid card" style="margin-bottom:1rem">
-      <div class="pstat"><div class="pstat-val">${p.matches}</div><div class="pstat-label">Matches</div></div>
-      <div class="pstat"><div class="pstat-val" style="color:var(--success)">${p.wins}</div><div class="pstat-label">Siege</div></div>
-      <div class="pstat"><div class="pstat-val" style="color:var(--error)">${p.losses}</div><div class="pstat-label">Niederl.</div></div>
-      <div class="pstat"><div class="pstat-val">${wr}%</div><div class="pstat-label">Quote</div></div>
-    </div>
+
     <div class="card" style="margin-bottom:1rem">
-      <div class="card-title">Level-Verlauf</div>
-      <div class="chart-wrap" id="pv-chart"><div class="text-muted text-center" style="font-size:.88rem">Lade Chart…</div></div>
+      <div class="profile-stats-grid" style="margin-bottom:${p.matches>0?'.85rem':'0'}">
+        <div class="pstat"><div class="pstat-val">${p.matches}</div><div class="pstat-label">Matches</div></div>
+        <div class="pstat"><div class="pstat-val" style="color:var(--success)">${p.wins}</div><div class="pstat-label">Siege</div></div>
+        <div class="pstat"><div class="pstat-val" style="color:var(--error)">${p.losses}</div><div class="pstat-label">Niederl.</div></div>
+        <div class="pstat"><div class="pstat-val">${wr}%</div><div class="pstat-label">Quote</div></div>
+      </div>
+      ${p.matches>0?`
+      <div>
+        <div style="height:7px;border-radius:999px;overflow:hidden;display:flex">
+          <div style="width:${wr}%;background:var(--success);transition:width .5s ease"></div>
+          <div style="flex:1;background:var(--error)"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:.73rem;margin-top:.3rem">
+          <span style="color:var(--success);font-weight:600">${p.wins} Siege (${wr}%)</span>
+          <span style="color:var(--error);font-weight:600">${p.losses} Niederlagen</span>
+        </div>
+      </div>`:``}
     </div>
+
     <div class="card" style="margin-bottom:1rem">
-      <div class="card-title">Letzte Matches</div>
+      <div class="card-title">📈 Level-Entwicklung</div>
+      <div class="chart-wrap" id="pv-chart" style="padding:.5rem 0 0"><div class="text-muted text-center" style="font-size:.88rem;padding:.5rem 0">Lade…</div></div>
+    </div>
+
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">🕐 Letzte Matches</div>
       <div id="pv-matches"><div class="text-muted" style="font-size:.88rem">Lade…</div></div>
     </div>
+
     <div class="card" id="pv-stats-card">
-      <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="toggleProfileStats()">
-        <div class="card-title" style="margin-bottom:0">📊 Statistiken</div>
-        <span id="pv-stats-arrow" style="color:var(--text-muted);font-size:.9rem">▶</span>
-      </div>
-      <div id="pv-stats-body" style="display:none;margin-top:1rem">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.5rem">
-          <div style="font-size:.82rem;font-weight:600;color:var(--text-muted)">📅 Monatsranking — <span id="month-name"></span></div>
-        </div>
+      <div class="card-title">📊 Statistiken</div>
+      <div id="pv-stats-body">
+        <div style="font-size:.8rem;font-weight:600;color:var(--text-muted);margin-bottom:.5rem">📅 Monatsranking — <span id="month-name"></span></div>
         <div id="monthly-list"><div class="text-muted" style="font-size:.88rem">Lade…</div></div>
-        <div style="margin-top:1rem;margin-bottom:.5rem;font-size:.82rem;font-weight:600;color:var(--text-muted)">⚔️ Head-to-Head</div>
+        <div style="margin-top:1.1rem;margin-bottom:.5rem;font-size:.8rem;font-weight:600;color:var(--text-muted)">⚔️ Head-to-Head</div>
         <div class="h2h-selects">
           <select id="h2h-p1" onchange="loadH2HStats()"><option value="">Spieler 1</option></select>
           <div class="h2h-vs">vs</div>
           <select id="h2h-p2" onchange="loadH2HStats()"><option value="">Spieler 2</option></select>
         </div>
         <div id="h2h-result"></div>
-        <div style="margin-top:1rem;margin-bottom:.5rem;font-size:.82rem;font-weight:600;color:var(--text-muted)">🔥 Formkurve — letzte 5 Matches</div>
-        <div id="form-list"></div>
+        <div style="margin-top:1.1rem;margin-bottom:.5rem;font-size:.8rem;font-weight:600;color:var(--text-muted)">🔥 Formkurve aller Spieler</div>
+        <div id="form-list"><div class="text-muted" style="font-size:.88rem">Lade…</div></div>
       </div>
     </div>`;
+
+  // Kick off stats (monthly + H2H + form) immediately — no more click-to-expand
+  buildH2HSelects();
+  renderStatsView();
 
   // Load chart + recent matches async
   const [histData, matchRes] = await Promise.all([
@@ -2184,9 +2250,25 @@ async function renderProfileView() {
     )
   ]);
 
+  // Form indicator in hero card
+  const trend = computeFormTrend(histData);
+  const formEl = $el('pv-form-indicator');
+  if (formEl && trend) {
+    const isUp = trend.eloDelta > 5, isDown = trend.eloDelta < -5;
+    const arrow = isUp ? '↑' : isDown ? '↓' : '→';
+    const trendCol = isUp ? 'var(--success)' : isDown ? 'var(--error)' : 'var(--text-muted)';
+    const eloPart = trend.eloDelta !== 0 ? ` (${trend.eloDelta>0?'+':''}${trend.eloDelta})` : '';
+    const streakPart = trend.streak >= 2
+      ? ` · ${trend.streak}× ${trend.streakWin ? '🟢' : '🔴'} in Folge`
+      : '';
+    formEl.innerHTML = `<span style="font-size:.8rem;font-weight:700;color:${trendCol}">${arrow} ${trend.wins}S ${trend.losses}N letzte ${trend.n}${eloPart}${streakPart}</span>`;
+  }
+
+  // Level chart
   const chartEl = $el('pv-chart');
   if (chartEl) chartEl.innerHTML = renderEloChart(histData);
 
+  // Last matches list
   const matchEl = $el('pv-matches');
   if (!matchEl) return;
   const matches = matchRes?.data || [];
@@ -2198,11 +2280,13 @@ async function renderProfileView() {
       const opp = byId(isW ? m.loser_id : m.winner_id);
       const sets = (m.sets||[]).map(s=>`<span class="set-chip">${s.p1??'?'}:${s.p2??'?'}</span>`).join('');
       const delta = isW ? `+${m.elo_delta}` : '-'+Math.abs((m.elo_loser_before||0)-(m.elo_loser_after||0));
+      const dt = fmtDateShort(m.created_at);
       return `<div style="display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--border)">
-        <span style="font-size:.85rem;font-weight:700;color:${isW?'var(--success)':'var(--error)'}">${isW?'S':'N'}</span>
-        <span style="flex:1;font-size:.88rem">${opp?esc(opp.name):'?'}</span>
+        <span style="font-size:.85rem;font-weight:700;color:${isW?'var(--success)':'var(--error)'}">${isW?'✓':'✗'}</span>
+        <span style="flex:1;font-size:.88rem;font-weight:600">${opp?esc(opp.name):'?'}</span>
         <div class="match-sets">${sets}</div>
-        <span style="font-size:.78rem;font-weight:700;color:${isW?'var(--success)':'var(--error)'}">${delta}</span>
+        <span style="font-size:.78rem;font-weight:700;color:${isW?'var(--success)':'var(--error)'};min-width:36px;text-align:right">${delta}</span>
+        <span style="font-size:.72rem;color:var(--text-dim);min-width:52px;text-align:right">${dt}</span>
       </div>`;
     }).join('');
   }
