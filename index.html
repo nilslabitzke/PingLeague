@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PingLeague</title>
+  <script>(function(){var t=localStorage.getItem('pl_theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');})()</script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -15,6 +16,19 @@
       --bronze:#cd8b3e; --silver:#9eb0c8; --gold:#f0c040; --platinum:#90b8f0; --diamond:#40d8f8;
       --radius:10px; --radius-sm:6px;
     }
+    /* ── LIGHT MODE ─────────────────────────────────────────────────────── */
+    [data-theme="light"] {
+      --bg:#f0f0f8; --surface:#ffffff; --card:#f7f7fd; --card-hover:#eaeaf5;
+      --border:#d4d4e8;
+      --text:#1a1a2e; --text-muted:#5a5a8a; --text-dim:#a0a0c0;
+    }
+    [data-theme="light"] .form-group select option,
+    [data-theme="light"] .history-filters select option { background:#ffffff; color:#1a1a2e; }
+    [data-theme="light"] .toast { box-shadow:0 6px 24px rgba(0,0,0,.12); }
+    [data-theme="light"] .profile-overlay { background:rgba(0,0,0,.35); }
+    [data-theme="light"] .tr-overlay { background:rgba(0,0,0,.4); }
+    [data-theme="light"] .settings-overlay { background:rgba(0,0,0,.35); }
+    [data-theme="light"] .tournament-overlay { background:var(--bg); }
     body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; font-size:15px; line-height:1.5; min-height:100vh; }
 
     /* LOADING */
@@ -287,6 +301,16 @@
     .settings-header { padding:1.1rem 1.5rem; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
     .settings-title { font-size:1.05rem; font-weight:800; }
     .settings-body { padding:1.5rem; }
+    /* Theme toggle row */
+    .theme-row { display:flex; align-items:center; justify-content:space-between; padding:.9rem 0; border-top:1px solid var(--border); margin-top:.85rem; }
+    .theme-row-text .theme-row-label { font-size:.9rem; font-weight:700; }
+    .theme-row-text .theme-row-sub  { font-size:.75rem; color:var(--text-muted); margin-top:.1rem; }
+    .toggle-pill { position:relative; width:46px; height:26px; flex-shrink:0; cursor:pointer; }
+    .toggle-pill input { opacity:0; width:0; height:0; position:absolute; }
+    .toggle-pill-track { position:absolute; inset:0; background:var(--border); border-radius:999px; transition:background .2s; }
+    .toggle-pill-track::before { content:''; position:absolute; width:20px; height:20px; left:3px; top:3px; background:#fff; border-radius:50%; transition:transform .2s; box-shadow:0 1px 4px rgba(0,0,0,.25); }
+    .toggle-pill input:checked + .toggle-pill-track { background:var(--primary); }
+    .toggle-pill input:checked + .toggle-pill-track::before { transform:translateX(20px); }
 
     /* UTILS */
     .text-muted { color:var(--text-muted); } .text-center { text-align:center; }
@@ -374,6 +398,7 @@
           <div id="header-user-name" style="font-weight:600;font-size:.9rem"></div>
           <div id="header-user-club" style="font-size:.75rem;color:var(--text-muted)"></div>
         </button>
+        <button class="btn btn-secondary btn-sm" id="theme-toggle-btn" onclick="toggleTheme()" title="Design wechseln" style="padding:.35rem .55rem">🌙</button>
         <button class="btn btn-secondary btn-sm" onclick="openSettings()" title="Profil bearbeiten" style="padding:.35rem .55rem">⚙️</button>
         <button class="btn btn-secondary btn-sm" onclick="doLogout()">Abmelden</button>
       </div>
@@ -627,6 +652,16 @@
         <input type="text" id="settings-email" readonly style="opacity:.45;cursor:default">
       </div>
       <button class="btn btn-primary btn-full" id="btn-settings-save" onclick="saveProfileSettings()">Speichern</button>
+      <div class="theme-row">
+        <div class="theme-row-text">
+          <div class="theme-row-label" id="theme-row-label">🌙 Dark Mode</div>
+          <div class="theme-row-sub">Design der App wechseln</div>
+        </div>
+        <label class="toggle-pill" title="Helligkeit umschalten">
+          <input type="checkbox" id="theme-toggle-chk" onchange="toggleTheme()">
+          <span class="toggle-pill-track"></span>
+        </label>
+      </div>
       <div id="settings-elo-section" style="display:none;margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border)">
         <button class="btn btn-secondary btn-full" onclick="obStartRecalculate()">↺ Elo neu einschätzen</button>
         <p style="font-size:.75rem;color:var(--text-dim);margin-top:.5rem;text-align:center">Beantworte die 4 Fragen erneut, um dein Elo neu zu berechnen.</p>
@@ -644,6 +679,30 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storage:window.localStorage } });
 
 let S = { user:null, player:null, isAdmin:false, players:[], challenges:[], pendingMatches:[], tournaments:[], currentTournament:null, settings:{ k_high:32, k_low:16 } };
+
+// ── THEME ────────────────────────────────────────────────────────────────
+function applyTheme(theme) {
+  const isLight = theme === 'light';
+  if (isLight) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  } else {
+    document.documentElement.removeAttribute('data-theme');
+  }
+  const hdrBtn = $el('theme-toggle-btn');
+  const chk    = $el('theme-toggle-chk');
+  const lbl    = $el('theme-row-label');
+  if (hdrBtn) hdrBtn.textContent = isLight ? '☀️' : '🌙';
+  if (chk)    chk.checked        = isLight;
+  if (lbl)    lbl.textContent    = isLight ? '☀️ Light Mode' : '🌙 Dark Mode';
+}
+function toggleTheme() {
+  const next = (localStorage.getItem('pl_theme') || 'dark') === 'dark' ? 'light' : 'dark';
+  localStorage.setItem('pl_theme', next);
+  applyTheme(next);
+}
+function initTheme() {
+  applyTheme(localStorage.getItem('pl_theme') || 'dark');
+}
 
 // ── ELO & LEVEL ──────────────────────────────────────────────────────────
 function expected(ra, rb) { return 1 / (1 + Math.pow(10, (rb - ra) / 400)); }
@@ -2357,6 +2416,8 @@ setTimeout(()=>{
 },6000);
 
 function init() {
+  initTheme(); // apply saved theme + sync button icons once DOM is ready
+
   db.auth.onAuthStateChange(async(event,session)=>{
     if(event==='SIGNED_OUT'){
       _setupSession++; // abort any in-flight setupUser
