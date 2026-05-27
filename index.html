@@ -572,10 +572,11 @@
 <!-- TOURNAMENT RESULT ENTRY OVERLAY -->
 <div class="tr-overlay" id="tournament-result-overlay" onclick="if(event.target===this)closeTournamentResult()">
   <div class="tr-sheet">
-    <div style="font-size:.9rem;font-weight:700;text-align:center;margin-bottom:.25rem">Ergebnis eintragen</div>
+    <div id="tr-title" style="font-size:.9rem;font-weight:700;text-align:center;margin-bottom:.25rem">Ergebnis eintragen</div>
     <div style="font-size:.75rem;color:var(--text-muted);text-align:center;margin-bottom:.75rem">Spiel bis 11 · kein Unentschieden</div>
     <div id="tr-alert"></div>
     <input type="hidden" id="tr-match-id">
+    <input type="hidden" id="tr-is-edit" value="0">
     <div class="tr-score-row">
       <div class="tr-name" id="tr-p1-name">Spieler 1</div>
       <input type="number" class="tr-score-input" id="tr-score1" min="0" max="20" placeholder="0">
@@ -1756,6 +1757,7 @@ function renderTournamentContent() {
       ${gMatches.map(m => {
         const p1=byId(m.player1_id), p2=byId(m.player2_id), done=m.winner_id!==null;
         const canEnter = !done && p1 && p2 && (S.isAdmin || m.player1_id===S.player?.id || m.player2_id===S.player?.id);
+        const canEdit  = done && S.isAdmin;
         const leg = m.is_return_match ? '<span style="font-size:.65rem;color:var(--text-dim)">↩</span>' : '';
         return `<div style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;border-bottom:1px solid var(--border)">
           ${leg}
@@ -1764,6 +1766,7 @@ function renderTournamentContent() {
                 :`<span style="font-size:.75rem;color:var(--text-dim)">vs</span>`}
           <span style="flex:1;text-align:right;font-size:.8rem;${m.winner_id===m.player2_id?'font-weight:700':''}">${p2?esc(p2.name):'?'}</span>
           ${canEnter?`<button class="btn btn-primary btn-sm" style="font-size:.7rem;padding:.2rem .5rem;flex-shrink:0" onclick="openEnterTournamentResult('${m.id}')">Eintragen</button>`:''}
+          ${canEdit?`<button class="btn btn-secondary btn-sm" style="font-size:.7rem;padding:.2rem .4rem;flex-shrink:0" onclick="openEnterTournamentResult('${m.id}',true)" title="Bearbeiten">✏️</button>`:''}
         </div>`;
       }).join('')}
     </div>`;
@@ -1790,12 +1793,14 @@ function renderTournamentContent() {
         ${pm.map(m => {
           const p1=byId(m.player1_id), p2=byId(m.player2_id), done=m.winner_id!==null;
           const canEnter = !done && p1 && p2 && (S.isAdmin || m.player1_id===S.player?.id || m.player2_id===S.player?.id);
+          const canEdit  = done && S.isAdmin;
           return `<div style="display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--border)">
             <span style="flex:1;font-size:.88rem;${m.winner_id===m.player1_id?'font-weight:800':''}">${p1?esc(p1.name):'TBD'}</span>
             ${done?`<span style="font-size:1rem;font-weight:800">${m.score1}:${m.score2}</span>`
                   :`<span style="font-size:.82rem;color:var(--text-dim)">vs</span>`}
             <span style="flex:1;text-align:right;font-size:.88rem;${m.winner_id===m.player2_id?'font-weight:800':''}">${p2?esc(p2.name):'TBD'}</span>
             ${canEnter?`<button class="btn btn-primary btn-sm" style="font-size:.7rem;padding:.2rem .5rem;flex-shrink:0" onclick="openEnterTournamentResult('${m.id}')">Eintragen</button>`:''}
+            ${canEdit?`<button class="btn btn-secondary btn-sm" style="font-size:.7rem;padding:.2rem .4rem;flex-shrink:0" onclick="openEnterTournamentResult('${m.id}',true)" title="Bearbeiten">✏️</button>`:''}
           </div>`;
         }).join('')}
       </div>`;
@@ -1855,11 +1860,19 @@ function closeTournamentDetail() {
   S.currentTournament = null;
 }
 
-function openEnterTournamentResult(matchId) {
+function openEnterTournamentResult(matchId, isEdit=false) {
   const m = S.currentTournament?.tm.find(x => x.id === matchId);
   $el('tr-match-id').value = matchId;
-  $el('tr-score1').value = ''; $el('tr-score2').value = '';
+  $el('tr-is-edit').value = isEdit ? '1' : '0';
+  $el('tr-title').textContent = isEdit ? '✏️ Ergebnis bearbeiten' : 'Ergebnis eintragen';
   $el('tr-alert').innerHTML = '';
+  if (isEdit && m) {
+    // Pre-fill existing scores
+    $el('tr-score1').value = m.score1 ?? '';
+    $el('tr-score2').value = m.score2 ?? '';
+  } else {
+    $el('tr-score1').value = ''; $el('tr-score2').value = '';
+  }
   if (m) {
     const p1=byId(m.player1_id), p2=byId(m.player2_id);
     $el('tr-p1-name').textContent = p1?.name||'?';
@@ -1880,7 +1893,9 @@ async function submitTournamentResult() {
   if (isNaN(s1)||isNaN(s2)||s1<0||s2<0) { al.innerHTML='<div class="alert alert-error">Bitte gültige Werte.</div>'; return; }
   if (s1===s2) { al.innerHTML='<div class="alert alert-error">Kein Unentschieden möglich.</div>'; return; }
   const btn=$el('btn-submit-tr'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Speichern…';
-  const { error } = await db.rpc('submit_tournament_match', { p_match_id:matchId, p_score1:s1, p_score2:s2 });
+  const isEdit = $el('tr-is-edit').value === '1';
+  const rpcName = isEdit ? 'edit_tournament_match' : 'submit_tournament_match';
+  const { error } = await db.rpc(rpcName, { p_match_id:matchId, p_score1:s1, p_score2:s2 });
   btn.disabled=false; btn.innerHTML='Speichern';
   if (error) { al.innerHTML=`<div class="alert alert-error">${error.message}</div>`; return; }
   closeTournamentResult();
