@@ -770,7 +770,7 @@ function withTimeout(promise, ms, fallback) {
 }
 // ── PLAYER CACHE (localStorage) ───────────────────────────────────────────
 const PL_CACHE = 'pl_v1';
-const AUTO_REFRESH_MS = 7 * 24 * 60 * 60 * 1000; // 1 week
+const AUTO_REFRESH_MS = 2 * 60 * 1000; // 2 minutes — always fresh on reload + tab-switch
 function getCachedPlayers() {
   try { const c=JSON.parse(localStorage.getItem(PL_CACHE)||'null'); return c?.data||null; } catch(e){return null;}
 }
@@ -796,9 +796,12 @@ async function autoRefreshIfStale() {
   if (!S.user) return;
   const ts = getCachedTs();
   if (!ts || Date.now() - ts > AUTO_REFRESH_MS) {
-    console.log('Auto-Refresh: Daten älter als 1 Woche, lade neu…');
     const ok = await loadPlayers();
-    if (ok) { renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects(); }
+    if (ok) {
+      renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
+      // Re-render profile view so own stats are current too
+      if ($el('view-profile')?.classList.contains('active')) renderProfileView();
+    }
   }
 }
 function byId(id) { return S.players.find(p => p.id === id); }
@@ -2610,8 +2613,8 @@ function init() {
     if (!document.hidden) autoRefreshIfStale();
   });
 
-  // Auto-Refresh: stündlicher Wächter (für lange offene Tabs)
-  setInterval(autoRefreshIfStale, 60 * 60 * 1000);
+  // Auto-Refresh: alle 2 Minuten (für lange offene Tabs)
+  setInterval(autoRefreshIfStale, AUTO_REFRESH_MS);
 }
 init();
 </script>
