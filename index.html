@@ -1135,8 +1135,8 @@ async function openProfile(playerId) {
       <div class="pstat"><div class="pstat-val" style="color:var(--error)">${p.losses}</div><div class="pstat-label">Niederl.</div></div>
       <div class="pstat"><div class="pstat-val">${wr}%</div><div class="pstat-label">Quote</div></div>
     </div>
-    <div class="profile-section-title">Level-Verlauf</div>
-    <div class="chart-wrap" id="profile-chart"><div class="text-muted text-center" style="font-size:.88rem">Lade Chart…</div></div>
+    <div class="profile-section-title">Elo-Verlauf</div>
+    <div class="chart-wrap" id="profile-chart" style="min-height:60px"></div>
     <div class="profile-section-title">Letzte Matches</div>
     <div id="profile-matches"><div class="text-muted" style="font-size:.88rem">Lade…</div></div>
     ${S.player&&playerId!==S.player.id?`
@@ -1146,7 +1146,16 @@ async function openProfile(playerId) {
   overlay.classList.add('open');
   document.body.style.overflow='hidden';
 
-  // Load async data (both with timeout so modal never hangs forever)
+  // Paint chart from cache instantly (no "Lade…" seen)
+  try {
+    const raw = localStorage.getItem(`pl_hist_${playerId}`);
+    if (raw) {
+      const cached = JSON.parse(raw).map(pt=>({...pt, date:pt.date?new Date(pt.date):null}));
+      $el('profile-chart').innerHTML = renderEloChart(cached);
+    }
+  } catch {}
+
+  // Load async data (chart updates silently, no loading text)
   const [histData, matchData] = await Promise.all([
     loadPlayerEloHistory(playerId),
     withTimeout(
@@ -1155,8 +1164,10 @@ async function openProfile(playerId) {
     )
   ]);
 
-  // Render chart
-  $el('profile-chart').innerHTML = renderEloChart(histData);
+  // Update chart silently + refresh cache
+  const pcEl = $el('profile-chart');
+  if (pcEl) pcEl.innerHTML = renderEloChart(histData);
+  try { localStorage.setItem(`pl_hist_${playerId}`, JSON.stringify(histData)); } catch {}
 
   // Render recent matches
   const matches=matchData.data||[];
@@ -1226,35 +1237,52 @@ async function loadPlayerEloHistory(playerId) {
 
 function renderEloChart(pts) {
   if (pts.length < 2) return '<p class="text-muted text-center" style="font-size:.85rem;padding:.5rem">Noch zu wenige Matches für einen Verlauf.</p>';
-  const W=480, H=168, pl=38, pr=18, pt=14, pb=26, iW=W-pl-pr, iH=H-pt-pb;
+  const W=480, H=170, pl=44, pr=14, pt=14, pb=28, iW=W-pl-pr, iH=H-pt-pb;
   const elos = pts.map(p=>p.elo);
-  const minE = Math.min(...elos)-30, maxE = Math.max(...elos)+30, range = maxE-minE||1;
-  const cx = i => pl + (i/(pts.length-1))*iW;
+  // Y: nice Elo bounds snapped to grid
+  const rawMin=Math.min(...elos), rawMax=Math.max(...elos);
+  const eloStep = (rawMax-rawMin) <= 80 ? 25 : (rawMax-rawMin) <= 200 ? 50 : 100;
+  const minE = Math.floor((rawMin-10)/eloStep)*eloStep;
+  const maxE = Math.ceil((rawMax+10)/eloStep)*eloStep;
+  const range = maxE-minE||1;
   const cy = e => pt + iH - ((e-minE)/range)*iH;
-  const poly = pts.map((p,i)=>`${cx(i).toFixed(1)},${cy(p.elo).toFixed(1)}`).join(' ');
-  const area = [`${pl},${(pt+iH).toFixed(1)}`, ...pts.map((p,i)=>`${cx(i).toFixed(1)},${cy(p.elo).toFixed(1)}`), `${(pl+iW).toFixed(1)},${(pt+iH).toFixed(1)}`].join(' ');
-  // Y-axis: Level gridlines
-  const eloForLvl = l => 1000 + (l-0.5)/6.5*1000;
-  const allLvlLines = [];
-  for (let l=0.5; l<=7.0; l+=0.5) {
-    const e=eloForLvl(l);
-    if (e>=minE&&e<=maxE) allLvlLines.push({l,y:cy(e)});
+  // Y gridlines (Elo values)
+  const yLines = [];
+  for (let e=minE; e<=maxE; e+=eloStep) yLines.push({e, y:cy(e)});
+  // X: date-mapped (or index-mapped as fallback)
+  const hasDates = pts[0]?.date instanceof Date && !isNaN(pts[0].date);
+  const minT = hasDates ? pts[0].date.getTime() : 0;
+  const maxT = hasDates ? pts[pts.length-1].date.getTime() : pts.length-1;
+  const tRange = maxT - minT || 1;
+  const cx = i => pl + ((hasDates ? pts[i].date.getTime()-minT : i*(tRange/(pts.length-1)))/tRange)*iW;
+  // X: weekly gridlines
+  const xLines = [];
+  if (hasDates) {
+    const weekMs = 7*24*60*60*1000;
+    const totalWeeks = Math.ceil(tRange/weekMs);
+    const everyN = totalWeeks <= 5 ? 1 : totalWeeks <= 10 ? 2 : Math.ceil(totalWeeks/5);
+    // First Monday >= minT
+    const d0 = new Date(minT);
+    const daysToMon = d0.getDay()===1 ? 0 : (8-d0.getDay())%7;
+    let wk = new Date(minT + daysToMon*86400000); wk.setHours(0,0,0,0);
+    let wi = 0;
+    while (wk.getTime() <= maxT) {
+      if (wi%everyN===0) {
+        const x = pl + (wk.getTime()-minT)/tRange*iW;
+        if (x > pl+8 && x < pl+iW-8) xLines.push({x, label:fmtDateShort(wk)});
+      }
+      wk = new Date(wk.getTime()+weekMs); wi++;
+    }
+    // Always show first and last date at edges
+    xLines.unshift({x:pl,       label:fmtDateShort(pts[0].date),          edge:true});
+    xLines.push(   {x:pl+iW,    label:fmtDateShort(pts[pts.length-1].date), edge:true});
   }
-  // Thin out if too many
-  const lvlStep = allLvlLines.length > 6 ? 2 : 1;
-  const lvlLines = allLvlLines.filter((_,i)=>i%lvlStep===0);
-  // X-axis: date labels (first, mid, last)
-  const dateIdxs = [...new Set([0, Math.floor((pts.length-1)/2), pts.length-1])];
-  const dateLabels = pts[0]?.date instanceof Date
-    ? dateIdxs.map(i=>({x:cx(i), label:fmtDateShort(pts[i].date)}))
-    : [];
-  // Dots (skip idx 0 = starting Elo)
+  const poly = pts.map((_,i)=>`${cx(i).toFixed(1)},${cy(pts[i].elo).toFixed(1)}`).join(' ');
+  const area = [`${pl},${(pt+iH).toFixed(1)}`, ...pts.map((_,i)=>`${cx(i).toFixed(1)},${cy(pts[i].elo).toFixed(1)}`), `${(pl+iW).toFixed(1)},${(pt+iH).toFixed(1)}`].join(' ');
   const dots = pts.slice(1).map((p,i)=>({x:cx(i+1), y:cy(p.elo), w:p.win}));
-  // Current level label near last dot
-  const last = pts[pts.length-1];
-  const lastX = cx(pts.length-1), lastY = cy(last.elo);
-  const lastLvl = eloToLevel(last.elo);
-  const labelY = Math.max(pt+11, lastY-8);
+  // Current Elo label near last dot
+  const lastX=cx(pts.length-1), lastY=cy(pts[pts.length-1].elo);
+  const annoY=Math.max(pt+10, lastY-8);
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">
     <defs>
       <linearGradient id="eg" x1="0" y1="0" x2="0" y2="1">
@@ -1262,13 +1290,15 @@ function renderEloChart(pts) {
         <stop offset="100%" stop-color="var(--primary)" stop-opacity="0"/>
       </linearGradient>
     </defs>
-    ${lvlLines.map(l=>`<line x1="${pl}" y1="${l.y.toFixed(1)}" x2="${W-pr}" y2="${l.y.toFixed(1)}" stroke="var(--border)" stroke-width="1"/>
-      <text x="${pl-4}" y="${(l.y+3.5).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--text-muted)">${l.l.toFixed(1)}</text>`).join('')}
-    ${dateLabels.map(d=>`<text x="${d.x.toFixed(1)}" y="${H-4}" text-anchor="middle" font-size="9" fill="var(--text-dim)">${d.label}</text>`).join('')}
+    ${yLines.map(l=>`<line x1="${pl}" y1="${l.y.toFixed(1)}" x2="${W-pr}" y2="${l.y.toFixed(1)}" stroke="var(--border)" stroke-width="1"/>
+      <text x="${pl-4}" y="${(l.y+3.5).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--text-muted)">${l.e}</text>`).join('')}
+    ${xLines.map(d=>`
+      ${!d.edge?`<line x1="${d.x.toFixed(1)}" y1="${pt}" x2="${d.x.toFixed(1)}" y2="${(pt+iH).toFixed(1)}" stroke="var(--border)" stroke-width="1" stroke-dasharray="2,4"/>`:''}
+      <text x="${d.x.toFixed(1)}" y="${H-4}" text-anchor="${d.x<pl+30?'start':d.x>pl+iW-30?'end':'middle'}" font-size="9" fill="var(--text-dim)">${d.label}</text>`).join('')}
     <polygon points="${area}" fill="url(#eg)"/>
     <polyline points="${poly}" fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
     ${dots.map(d=>`<circle cx="${d.x.toFixed(1)}" cy="${d.y.toFixed(1)}" r="3" fill="${d.w===null?'var(--primary)':d.w?'var(--success)':'var(--error)'}" stroke="var(--card)" stroke-width="1.5"/>`).join('')}
-    <text x="${lastX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="middle" font-size="10" font-weight="700" fill="var(--primary-lt)">${lastLvl.toFixed(1)}</text>
+    <text x="${(lastX-4).toFixed(1)}" y="${annoY.toFixed(1)}" text-anchor="end" font-size="10" font-weight="700" fill="var(--primary-lt)">${pts[pts.length-1].elo}</text>
   </svg>`;
 }
 
@@ -2212,7 +2242,7 @@ async function renderProfileView() {
 
     <div class="card" style="margin-bottom:1rem">
       <div class="card-title">📈 Level-Entwicklung</div>
-      <div class="chart-wrap" id="pv-chart" style="padding:.5rem 0 0"><div class="text-muted text-center" style="font-size:.88rem;padding:.5rem 0">Lade…</div></div>
+      <div class="chart-wrap" id="pv-chart" style="padding:.5rem 0 0;min-height:80px"></div>
     </div>
 
     <div class="card" style="margin-bottom:1rem">
@@ -2237,11 +2267,36 @@ async function renderProfileView() {
       </div>
     </div>`;
 
-  // Kick off stats (monthly + H2H + form) immediately — no more click-to-expand
+  // ── Stale-while-revalidate: paint from cache instantly, update silently ──
+  const _histCacheKey = `pl_hist_${p.id}`;
+  function _applyHistData(pts) {
+    const chartEl = $el('pv-chart');
+    if (chartEl) chartEl.innerHTML = renderEloChart(pts);
+    const trend = computeFormTrend(pts);
+    const formEl = $el('pv-form-indicator');
+    if (formEl && trend) {
+      const isUp = trend.eloDelta > 5, isDown = trend.eloDelta < -5;
+      const arrow = isUp ? '↑' : isDown ? '↓' : '→';
+      const trendCol = isUp ? 'var(--success)' : isDown ? 'var(--error)' : 'var(--text-muted)';
+      const eloPart = trend.eloDelta !== 0 ? ` (${trend.eloDelta>0?'+':''}${trend.eloDelta})` : '';
+      const streakPart = trend.streak >= 2 ? ` · ${trend.streak}× ${trend.streakWin?'🟢':'🔴'} in Folge` : '';
+      formEl.innerHTML = `<span style="font-size:.8rem;font-weight:700;color:${trendCol}">${arrow} ${trend.wins}S ${trend.losses}N letzte ${trend.n}${eloPart}${streakPart}</span>`;
+    }
+  }
+  // Paint from cache immediately (no loading flash)
+  try {
+    const raw = localStorage.getItem(_histCacheKey);
+    if (raw) {
+      const cached = JSON.parse(raw).map(pt=>({...pt, date:pt.date?new Date(pt.date):null}));
+      _applyHistData(cached);
+    }
+  } catch {}
+
+  // Kick off stats (monthly + H2H + form) immediately
   buildH2HSelects();
   renderStatsView();
 
-  // Load chart + recent matches async
+  // Fetch fresh data (chart will silently update, no "Lade…" shown)
   const [histData, matchRes] = await Promise.all([
     loadPlayerEloHistory(p.id),
     withTimeout(
@@ -2250,23 +2305,10 @@ async function renderProfileView() {
     )
   ]);
 
-  // Form indicator in hero card
-  const trend = computeFormTrend(histData);
-  const formEl = $el('pv-form-indicator');
-  if (formEl && trend) {
-    const isUp = trend.eloDelta > 5, isDown = trend.eloDelta < -5;
-    const arrow = isUp ? '↑' : isDown ? '↓' : '→';
-    const trendCol = isUp ? 'var(--success)' : isDown ? 'var(--error)' : 'var(--text-muted)';
-    const eloPart = trend.eloDelta !== 0 ? ` (${trend.eloDelta>0?'+':''}${trend.eloDelta})` : '';
-    const streakPart = trend.streak >= 2
-      ? ` · ${trend.streak}× ${trend.streakWin ? '🟢' : '🔴'} in Folge`
-      : '';
-    formEl.innerHTML = `<span style="font-size:.8rem;font-weight:700;color:${trendCol}">${arrow} ${trend.wins}S ${trend.losses}N letzte ${trend.n}${eloPart}${streakPart}</span>`;
-  }
-
-  // Level chart
-  const chartEl = $el('pv-chart');
-  if (chartEl) chartEl.innerHTML = renderEloChart(histData);
+  // Silently update chart + form indicator with fresh data
+  _applyHistData(histData);
+  // Persist fresh data to cache
+  try { localStorage.setItem(_histCacheKey, JSON.stringify(histData)); } catch {}
 
   // Last matches list
   const matchEl = $el('pv-matches');
