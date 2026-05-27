@@ -391,7 +391,7 @@
         <button class="nav-btn" data-view="ranking" onclick="showView('ranking')">Rangliste</button>
         <button class="nav-btn" data-view="match" onclick="showView('match')">Match</button>
         <button class="nav-btn" data-view="challenges" onclick="showView('challenges')">⚔️ Challenges<span class="ch-badge" id="ch-badge-top"></span></button>
-        <button class="nav-btn" data-view="admin" id="admin-nav" style="display:none" onclick="showView('admin')">Admin</button>
+        <button class="nav-btn" data-view="admin" id="admin-nav" style="display:none" onclick="showView('admin')">Admin<span class="ch-badge" id="admin-report-badge-top"></span></button>
       </nav>
       <div class="user-area">
         <button id="header-user-btn" onclick="S.player&&openProfile(S.player.id)" style="background:none;border:none;cursor:pointer;text-align:right;color:var(--text);line-height:1.3;">
@@ -412,7 +412,7 @@
       <button class="bnav-btn" data-view="ranking" onclick="showView('ranking')"><span class="bnav-icon">🏆</span>Liga</button>
       <button class="bnav-btn" data-view="match" onclick="showView('match')"><span class="bnav-icon">➕</span>Match</button>
       <button class="bnav-btn" data-view="challenges" onclick="showView('challenges')"><span class="bnav-icon">⚔️</span>Challenge<span class="ch-badge" id="ch-badge-bottom"></span></button>
-      <button class="bnav-btn" data-view="admin" id="bottom-admin-btn" style="display:none" onclick="showView('admin')"><span class="bnav-icon">⚙️</span>Admin</button>
+      <button class="bnav-btn" data-view="admin" id="bottom-admin-btn" style="display:none" onclick="showView('admin')"><span class="bnav-icon">⚙️</span>Admin<span class="ch-badge" id="admin-report-badge-bottom"></span></button>
     </div>
   </div>
 
@@ -499,10 +499,6 @@
       <!-- CHALLENGES SUB -->
       <div id="sub-challenges" class="sub-content active">
         <div style="display:flex;flex-direction:column;gap:1.25rem">
-          <div class="card" id="pending-matches-card" style="display:none">
-            <div class="card-title">⏳ Ausstehende Matches <span id="pm-badge" class="ch-badge" style="position:static;margin-left:.4rem;vertical-align:middle"></span></div>
-            <div id="pending-matches-list"><div class="text-muted" style="font-size:.85rem">Keine ausstehenden Matches.</div></div>
-          </div>
           <div class="card">
             <div class="card-title">🔍 Spieler herausfordern</div>
             <div class="form-group" style="margin-bottom:.5rem">
@@ -537,6 +533,10 @@
     <div id="view-admin" class="view">
       <div class="view-header"><h2>Admin Panel</h2><p>Systemeinstellungen und Spielerverwaltung</p></div>
       <div class="admin-grid">
+        <div class="card" style="grid-column:1/-1" id="admin-reports-card">
+          <div class="card-title">🚩 Gemeldete Matches <span id="admin-reports-badge" class="ch-badge" style="position:static;margin-left:.4rem;vertical-align:middle"></span></div>
+          <div id="admin-reports-list"><div class="text-muted" style="font-size:.85rem">Keine offenen Meldungen.</div></div>
+        </div>
         <div class="card">
           <div class="card-title">K-Faktor</div>
           <div id="settings-alert"></div>
@@ -616,6 +616,24 @@
   </div>
 </div>
 
+<!-- REPORT MATCH MODAL -->
+<div class="tr-overlay" id="report-overlay" onclick="if(event.target===this)closeReportModal()">
+  <div class="tr-sheet">
+    <div style="font-size:.95rem;font-weight:800;text-align:center;margin-bottom:.3rem">🚩 Match melden</div>
+    <div style="font-size:.78rem;color:var(--text-muted);text-align:center;margin-bottom:.85rem">Der Admin wird benachrichtigt und überprüft das Match.</div>
+    <div id="report-alert"></div>
+    <input type="hidden" id="report-match-id">
+    <div class="form-group">
+      <label>Grund <span style="color:var(--text-dim)">(optional)</span></label>
+      <input type="text" id="report-note" placeholder="z.B. Ergebnis ist falsch eingetragen" autocomplete="off">
+    </div>
+    <div style="display:flex;gap:.5rem;margin-top:.25rem">
+      <button class="btn btn-secondary btn-full" onclick="closeReportModal()">Abbrechen</button>
+      <button class="btn btn-danger btn-full" id="btn-submit-report" onclick="submitReport()">🚩 Melden</button>
+    </div>
+  </div>
+</div>
+
 <!-- PROFILE MODAL -->
 <div class="profile-overlay" id="profile-overlay" onclick="closeProfile(event)">
   <div class="profile-sheet" id="profile-sheet">
@@ -678,7 +696,7 @@ const SUPABASE_URL = 'https://xsxsyfaxhwrbllvvfxxm.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzeHN5ZmF4aHdyYmxsdnZmeHhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MTM1NzIsImV4cCI6MjA5NTE4OTU3Mn0.y35dDJTrkCNMU7P0V4H8iSMprITdRst9kl7B5_BMvc8';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storage:window.localStorage } });
 
-let S = { user:null, player:null, isAdmin:false, players:[], challenges:[], pendingMatches:[], tournaments:[], currentTournament:null, settings:{ k_high:32, k_low:16 } };
+let S = { user:null, player:null, isAdmin:false, players:[], challenges:[], tournaments:[], currentTournament:null, settings:{ k_high:32, k_low:16 }, reportCount:0 };
 
 // ── THEME ────────────────────────────────────────────────────────────────
 function applyTheme(theme) {
@@ -989,7 +1007,7 @@ async function setupUser(user) {
   applyPlayerData(pd, user);
   renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
   loadChallenges();      // load badge in background
-  loadPendingMatches();  // load pending match badge in background
+  if (S.isAdmin) loadAdminReports(); // load report badge for admin
   // Show profile tab first so the user lands on their own profile
   showView('profile');
 }
@@ -1507,7 +1525,6 @@ async function submitMatch() {
   const btn=$el('btn-submit-match'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Speichern…';
   try {
     if (S.isAdmin) {
-      // Admin path: direct, atomic, no confirmation needed
       const {error} = await db.rpc('submit_match', {
         p_winner_id:         wid,
         p_loser_id:          lid,
@@ -1520,29 +1537,10 @@ async function submitMatch() {
       });
       if (error) throw error;
       clearMatchForm();
-      toast(`✓ ${w.name} gewinnt +${elo.gain} Elo`,'success');
+      toast(`✓ ${esc(w.name)} gewinnt +${elo.gain} Elo`, 'success');
       await loadPlayers(); renderRanking(); buildMatchSelects();
-      if(S.player) S.player=byId(S.player.id)||S.player;
+      if (S.player) S.player = byId(S.player.id) || S.player;
       if ($el('view-profile').classList.contains('active')) renderProfileView();
-    } else {
-      // Non-admin path: save as pending, opponent must confirm
-      const {error} = await db.rpc('submit_pending_match', {
-        p_winner_id:          wid,
-        p_loser_id:           lid,
-        p_sets:               sets,
-        p_elo_winner_before:  w.elo,
-        p_elo_winner_after:   elo.wNew,
-        p_elo_loser_before:   l.elo,
-        p_elo_loser_after:    elo.lNew,
-        p_elo_delta:          elo.gain
-      });
-      if (error) throw error;
-      clearMatchForm();
-      const opponent = wid === S.player?.id ? l : w;
-      toast(`⏳ Ergebnis gesendet — ${esc(opponent.name)} muss bestätigen`, 'info');
-      await loadPendingMatches();
-      updateChallengeBadge();
-    }
   } catch(err) { console.error(err); alEl.innerHTML=`<div class="alert alert-error">Fehler: ${err.message}</div>`; }
   btn.disabled=false; btn.innerHTML='Match eintragen';
 }
@@ -1573,7 +1571,9 @@ async function loadHistory() {
     const lLoss=m.elo_loser_before!=null&&m.elo_loser_after!=null?Math.abs(m.elo_loser_before-m.elo_loser_after):m.elo_delta||0;
     return `<div class="match-card">
       <div><div class="match-player winner">${wP?esc(wP.name):'?'}</div><div class="match-elo pos">+${m.elo_delta||0} Elo</div></div>
-      <div class="match-center"><div class="match-sets">${sets}</div><div class="match-date">${fmtDate(m.created_at)}</div></div>
+      <div class="match-center"><div class="match-sets">${sets}</div><div class="match-date">${fmtDate(m.created_at)}</div>
+        <button onclick="openReportModal('${m.id}')" style="margin-top:.25rem;background:none;border:none;color:var(--text-dim);font-size:.7rem;cursor:pointer;padding:.1rem .3rem;border-radius:3px" title="Falsches Ergebnis melden" onmouseover="this.style.color='var(--error)'" onmouseout="this.style.color='var(--text-dim)'">🚩 Melden</button>
+      </div>
       <div class="match-right"><div class="match-player loser">${lP?esc(lP.name):'?'}</div><div class="match-elo neg">−${lLoss} Elo</div></div>
     </div>`;
   }).join('');
@@ -1636,85 +1636,111 @@ async function loadChallenges() {
   updateChallengeBadge();
 }
 
-async function loadPendingMatches() {
-  if (!S.player) return;
-  const { data } = await withTimeout(
-    db.from('pending_matches').select('*')
-      .or(`winner_id.eq.${S.player.id},loser_id.eq.${S.player.id}`)
-      .order('created_at', { ascending: false }),
-    8000, { data: null }
-  );
-  S.pendingMatches = data || [];
-  updateChallengeBadge();
-}
-
 function updateChallengeBadge() {
-  // Count: incoming challenges + matches waiting for MY confirmation
-  const incomingChallenges = S.challenges.filter(c => c.challenged_id === S.player?.id).length;
-  const pendingConfirm = S.pendingMatches.filter(m =>
-    m.submitted_by !== S.user?.id &&
-    (m.winner_id === S.player?.id || m.loser_id === S.player?.id)
-  ).length;
-  const total = incomingChallenges + pendingConfirm;
-  const val = total > 0 ? String(total) : '';
+  const incoming = S.challenges.filter(c => c.challenged_id === S.player?.id).length;
+  const val = incoming > 0 ? String(incoming) : '';
   ['ch-badge-top', 'ch-badge-bottom'].forEach(id => {
     const el = $el(id); if (el) el.textContent = val;
   });
 }
 
-async function confirmPendingMatch(matchId) {
-  const { error } = await db.rpc('confirm_pending_match', { p_match_id: matchId });
-  if (error) { toast(`Fehler: ${error.message}`, 'error'); return; }
-  toast('Match bestätigt ✓ Elo aktualisiert!', 'success');
-  await Promise.all([loadPendingMatches(), loadPlayers()]);
-  renderRanking(); buildMatchSelects();
-  if(S.player) S.player = byId(S.player.id) || S.player;
-  if ($el('view-profile').classList.contains('active')) renderProfileView();
-  if ($el('view-challenges').classList.contains('active')) renderPendingMatchesSection();
+// ── MATCH REPORTS ─────────────────────────────────────────────────────────
+function openReportModal(matchId) {
+  $el('report-match-id').value = matchId;
+  $el('report-note').value = '';
+  $el('report-alert').innerHTML = '';
+  $el('report-overlay').classList.add('open');
+}
+function closeReportModal() {
+  $el('report-overlay').classList.remove('open');
+}
+async function submitReport() {
+  const matchId = $el('report-match-id').value;
+  const note = $el('report-note').value.trim();
+  const btn = $el('btn-submit-report');
+  const al = $el('report-alert');
+  al.innerHTML = '';
+  btn.disabled = true; btn.textContent = '…';
+  try {
+    const { error } = await db.rpc('report_match', { p_match_id: matchId, p_note: note });
+    if (error) throw error;
+    closeReportModal();
+    toast('🚩 Match gemeldet — der Admin wird informiert.', 'info');
+  } catch(err) {
+    al.innerHTML = `<div class="alert alert-error" style="margin-bottom:.5rem">${err.message}</div>`;
+  }
+  btn.disabled = false; btn.innerHTML = '🚩 Melden';
 }
 
-async function rejectPendingMatch(matchId) {
-  const { error } = await db.rpc('reject_pending_match', { p_match_id: matchId });
-  if (error) { toast(`Fehler: ${error.message}`, 'error'); return; }
-  toast('Match abgelehnt.', 'info');
-  await loadPendingMatches();
-  if ($el('view-challenges').classList.contains('active')) renderPendingMatchesSection();
-}
-
-function renderPendingMatchesSection() {
-  const card = $el('pending-matches-card');
-  const list = $el('pending-matches-list');
-  const badge = $el('pm-badge');
-  if (!card || !list) return;
-
-  const pm = S.pendingMatches;
-  card.style.display = pm.length ? '' : 'none';
-  if (badge) badge.textContent = pm.length > 0 ? String(pm.length) : '';
-  if (!pm.length) return;
-
-  list.innerHTML = pm.map(m => {
-    const winner = byId(m.winner_id), loser = byId(m.loser_id);
-    const isMySubmission = m.submitted_by === S.user?.id;
-    const needsMyConfirm = !isMySubmission && (m.winner_id === S.player?.id || m.loser_id === S.player?.id);
-    const sets = (m.sets||[]).map(s=>`<span class="set-chip">${s.p1??'?'}:${s.p2??'?'}</span>`).join('');
-    return `<div class="challenge-card" style="flex-wrap:wrap;gap:.75rem">
+async function loadAdminReports() {
+  if (!S.isAdmin) return;
+  const { data } = await withTimeout(
+    db.from('match_reports')
+      .select('id,match_id,note,created_at,reviewed,reported_by')
+      .eq('reviewed', false)
+      .order('created_at', { ascending: false }),
+    8000, { data: null }
+  );
+  const reports = data || [];
+  S.reportCount = reports.length;
+  // Update badges
+  const badgeVal = reports.length > 0 ? String(reports.length) : '';
+  ['admin-report-badge-top','admin-report-badge-bottom','admin-reports-badge'].forEach(id=>{
+    const el=$el(id); if(el) el.textContent=badgeVal;
+  });
+  // Render list in admin panel
+  const listEl = $el('admin-reports-list'); if (!listEl) return;
+  if (!reports.length) {
+    listEl.innerHTML = '<div class="text-muted" style="font-size:.85rem">Keine offenen Meldungen.</div>';
+    return;
+  }
+  // Fetch the reported matches details
+  const matchIds = [...new Set(reports.map(r=>r.match_id))];
+  const { data: matchData } = await withTimeout(
+    db.from('matches').select('id,winner_id,loser_id,sets,created_at,elo_delta').in('id', matchIds),
+    8000, { data: null }
+  );
+  const matchMap = Object.fromEntries((matchData||[]).map(m=>[m.id,m]));
+  listEl.innerHTML = reports.map(r => {
+    const m = matchMap[r.match_id];
+    const reporter = byId(r.reported_by);
+    const winner = m ? byId(m.winner_id) : null;
+    const loser  = m ? byId(m.loser_id)  : null;
+    const sets   = m ? (m.sets||[]).map(s=>`<span class="set-chip">${s.p1??'?'}:${s.p2??'?'}</span>`).join('') : '';
+    return `<div class="challenge-card" style="flex-wrap:wrap;gap:.5rem;margin-bottom:.5rem">
       <div style="flex:1;min-width:0">
-        <div style="font-size:.85rem;font-weight:600;margin-bottom:.2rem">
+        <div style="font-size:.85rem;font-weight:600">
           <span style="color:var(--success)">${winner?esc(winner.name):'?'}</span>
-          <span style="color:var(--text-muted);margin:0 .3rem">vs</span>
+          <span style="color:var(--text-muted);margin:0 .25rem">vs</span>
           <span style="color:var(--error)">${loser?esc(loser.name):'?'}</span>
+          ${m?`<span style="color:var(--text-muted);font-weight:400;margin-left:.4rem;font-size:.78rem">+${m.elo_delta||0} Elo</span>`:''}
         </div>
-        <div style="display:flex;gap:.3rem;flex-wrap:wrap;margin-bottom:.2rem">${sets}</div>
-        <div style="font-size:.75rem;color:var(--text-muted)">${fmtAgo(m.created_at)} · ${isMySubmission?'⏳ Warte auf Bestätigung':'❗ Bestätigung ausstehend'}</div>
+        <div style="display:flex;gap:.3rem;flex-wrap:wrap;margin:.2rem 0">${sets}</div>
+        <div style="font-size:.75rem;color:var(--text-muted)">
+          Gemeldet von <strong>${reporter?esc(reporter.name):'?'}</strong> · ${fmtAgo(r.created_at)}
+          ${r.note?`<br><em>"${esc(r.note)}"</em>`:''}
+        </div>
       </div>
-      <div style="display:flex;gap:.4rem;align-items:center;flex-shrink:0">
-        ${needsMyConfirm
-          ? `<button class="btn btn-success btn-sm" onclick="confirmPendingMatch('${m.id}')">✓ Bestätigen</button>
-             <button class="btn btn-danger btn-sm" onclick="rejectPendingMatch('${m.id}')">✕ Ablehnen</button>`
-          : `<button class="btn btn-secondary btn-sm" onclick="rejectPendingMatch('${m.id}')">Zurückziehen</button>`}
-      </div>
+      <button class="btn btn-secondary btn-sm" onclick="dismissReport('${r.id}')">✓ Erledigt</button>
     </div>`;
   }).join('');
+}
+
+async function dismissReport(reportId) {
+  const { error } = await db.rpc('dismiss_report', { p_report_id: reportId });
+  if (error) { toast(`Fehler: ${error.message}`, 'error'); return; }
+  toast('Meldung als erledigt markiert.', 'success');
+  loadAdminReports();
+}
+
+// ── PLACEHOLDER (was renderPendingMatchesSection) ────────────────────────
+function renderPendingMatchesSection() { /* removed — no pending system */ }
+
+// Old code that referenced pending matches kept as stubs so nothing breaks:
+async function loadPendingMatches() { /* removed */ }
+function dummy_never_shown() {
+  // dead-code stubs so stale HTML refs don't throw ReferenceError
+  void 0;
 }
 
 async function sendChallenge(targetPlayerId) {
@@ -2191,11 +2217,10 @@ function showView(id) {
   document.querySelectorAll(`[data-view="${id}"]`).forEach(b=>b.classList.add('active'));
   if(id==='profile'){renderProfileView();}
   else if(id==='ranking'){loadPlayers().then(renderRanking);}
-  else if(id==='admin'){renderAdminPlayers();}
+  else if(id==='admin'){renderAdminPlayers(); loadAdminReports();}
   else if(id==='challenges'){
-    Promise.all([loadChallenges(), loadPendingMatches(), loadTournaments()]).then(()=>{
+    Promise.all([loadChallenges(), loadTournaments()]).then(()=>{
       renderChallengesView();
-      renderPendingMatchesSection();
       renderTournamentsSection();
     });
   }
