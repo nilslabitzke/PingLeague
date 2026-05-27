@@ -692,6 +692,7 @@
 
 <script>
 'use strict';
+const MY_PLAYER_KEY = 'pl_myid'; // cached player ID for instant startup
 const SUPABASE_URL = 'https://xsxsyfaxhwrbllvvfxxm.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzeHN5ZmF4aHdyYmxsdnZmeHhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MTM1NzIsImV4cCI6MjA5NTE4OTU3Mn0.y35dDJTrkCNMU7P0V4H8iSMprITdRst9kl7B5_BMvc8';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storage:window.localStorage } });
@@ -943,6 +944,7 @@ async function doLogout() {
   // Clear state and navigate away immediately — don't wait for the network
   _setupSession++;
   S.user=null; S.player=null; S.isAdmin=false;
+  try { localStorage.removeItem(MY_PLAYER_KEY); } catch(e) {}
   showPage('auth');
   try { await db.auth.signOut(); } catch(e) { console.error('signOut:', e); }
 }
@@ -950,6 +952,8 @@ async function doLogout() {
 // ── SETUP ─────────────────────────────────────────────────────────────────
 function applyPlayerData(pd, user) {
   S.player = pd; S.isAdmin = pd?.is_admin || false;
+  // Cache the player ID so init() can restore the view instantly next load
+  try { if (pd?.id) localStorage.setItem(MY_PLAYER_KEY, pd.id); } catch(e) {}
   $el('header-user-name').textContent = pd?.name || '';
   $el('header-user-club').textContent = fmtClub(pd);
   $el('admin-nav').style.display = S.isAdmin ? '' : 'none';
@@ -2617,6 +2621,23 @@ setTimeout(()=>{
 
 function init() {
   initTheme(); // apply saved theme + sync button icons once DOM is ready
+
+  // ── Instant startup from cache (removes "Starte PingLeague…" for returning users) ──
+  try {
+    const cachedPlayers = getCachedPlayers();
+    const myId = localStorage.getItem(MY_PLAYER_KEY);
+    if (cachedPlayers?.length && myId) {
+      const myPlayer = cachedPlayers.find(p => p.id === myId);
+      if (myPlayer) {
+        S.players = cachedPlayers;
+        S.player  = myPlayer;
+        S.isAdmin = myPlayer.is_admin || false;
+        renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
+        showPage('app');   // dismiss loading spinner instantly
+        showView('profile');
+      }
+    }
+  } catch(e) { console.warn('instant startup failed:', e); }
 
   db.auth.onAuthStateChange(async(event,session)=>{
     if(event==='SIGNED_OUT'){
