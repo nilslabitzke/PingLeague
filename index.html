@@ -1217,20 +1217,60 @@ function closeProfile(e) {
 }
 
 async function loadPlayerEloHistory(playerId) {
-  const {data} = await withTimeout(
-    db.from('matches')
-      .select('winner_id,elo_winner_before,elo_winner_after,elo_loser_before,elo_loser_after,created_at')
-      .or(`winner_id.eq.${playerId},loser_id.eq.${playerId}`)
-      .order('created_at',{ascending:true}),
-    10000, {data:null}
-  );
-  if (!data?.length) return [];
-  const pts=[];
-  const first=data[0];
-  pts.push({elo:first.winner_id===playerId?first.elo_winner_before:first.elo_loser_before, win:null, date:new Date(first.created_at)});
-  for (const m of data) {
-    const win=m.winner_id===playerId;
-    pts.push({elo:win?m.elo_winner_after:m.elo_loser_after, win, date:new Date(m.created_at)});
+  // Fetch regular matches + tournament matches in parallel
+  const [regRes, tmRes] = await Promise.all([
+    withTimeout(
+      db.from('matches')
+        .select('winner_id,elo_winner_before,elo_winner_after,elo_loser_before,elo_loser_after,created_at')
+        .or(`winner_id.eq.${playerId},loser_id.eq.${playerId}`)
+        .order('created_at',{ascending:true}),
+      10000, {data:null}
+    ),
+    withTimeout(
+      db.from('tournament_matches')
+        .select('winner_id,elo_winner_before,elo_loser_before,elo_delta,elo_loss,completed_at')
+        .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
+        .not('winner_id','is',null)
+        .not('elo_winner_before','is',null)
+        .order('completed_at',{ascending:true}),
+      10000, {data:null}
+    )
+  ]);
+
+  // Normalise tournament matches to the same shape as regular matches
+  const tmNorm = (tmRes?.data || []).map(m => {
+    const isWin = m.winner_id === playerId;
+    return {
+      winner_id:        m.winner_id,
+      elo_winner_before: m.elo_winner_before,
+      elo_winner_after:  m.elo_winner_before + (m.elo_delta || 0),
+      elo_loser_before:  m.elo_loser_before,
+      elo_loser_after:   m.elo_loser_before  - (m.elo_loss  || 0),
+      created_at:        m.completed_at
+    };
+  });
+
+  // Merge and sort by date
+  const all = [...(regRes?.data || []), ...tmNorm]
+    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+
+  if (!all.length) return [];
+
+  const pts = [];
+  const first = all[0];
+  // Starting Elo (before the very first match)
+  pts.push({
+    elo:  first.winner_id === playerId ? first.elo_winner_before : first.elo_loser_before,
+    win:  null,
+    date: new Date(first.created_at)
+  });
+  for (const m of all) {
+    const win = m.winner_id === playerId;
+    pts.push({
+      elo:  win ? m.elo_winner_after : m.elo_loser_after,
+      win,
+      date: new Date(m.created_at)
+    });
   }
   return pts;
 }
