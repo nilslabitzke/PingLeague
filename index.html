@@ -1534,23 +1534,22 @@ async function submitMatch() {
   const elo=calcElo(w.elo,l.elo,w.matches,l.matches);
   const btn=$el('btn-submit-match'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Speichern…';
   try {
-    if (S.isAdmin) {
-      const {error} = await db.rpc('submit_match', {
-        p_winner_id:         wid,
-        p_loser_id:          lid,
-        p_sets:              sets,
-        p_elo_winner_before: w.elo,
-        p_elo_winner_after:  elo.wNew,
-        p_elo_loser_before:  l.elo,
-        p_elo_loser_after:   elo.lNew,
-        p_elo_delta:         elo.gain
-      });
-      if (error) throw error;
-      clearMatchForm();
-      toast(`✓ ${esc(w.name)} gewinnt +${elo.gain} Elo`, 'success');
-      await loadPlayers(); renderRanking(); buildMatchSelects();
-      if (S.player) S.player = byId(S.player.id) || S.player;
-      if ($el('view-profile').classList.contains('active')) renderProfileView();
+    const {error} = await db.rpc('submit_match', {
+      p_winner_id:         wid,
+      p_loser_id:          lid,
+      p_sets:              sets,
+      p_elo_winner_before: w.elo,
+      p_elo_winner_after:  elo.wNew,
+      p_elo_loser_before:  l.elo,
+      p_elo_loser_after:   elo.lNew,
+      p_elo_delta:         elo.gain
+    });
+    if (error) throw error;
+    clearMatchForm();
+    toast(`✓ ${esc(w.name)} gewinnt +${elo.gain} Elo`, 'success');
+    await loadPlayers(); renderRanking(); buildMatchSelects();
+    if (S.player) S.player = byId(S.player.id) || S.player;
+    if ($el('view-profile').classList.contains('active')) renderProfileView();
   } catch(err) { console.error(err); alEl.innerHTML=`<div class="alert alert-error">Fehler: ${err.message}</div>`; }
   btn.disabled=false; btn.innerHTML='Match eintragen';
 }
