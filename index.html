@@ -1783,8 +1783,8 @@ function renderTournamentContent() {
 
   // K.O. bracket
   if (t.status === 'knockout' || t.status === 'finished') {
-    const koPhaseOrder = ['quarterfinal','semifinal','final'];
-    const koLabel = { quarterfinal:'Viertelfinale', semifinal:'Halbfinale', final:'Finale 🏆' };
+    const koPhaseOrder = ['quarterfinal','semifinal','third_place','final'];
+    const koLabel = { quarterfinal:'Viertelfinale', semifinal:'Halbfinale', third_place:'Spiel um Platz 3 🥉', final:'Finale 🏆' };
     koPhaseOrder.forEach(phase => {
       const pm = tm.filter(m => m.phase===phase);
       if (!pm.length) return;
