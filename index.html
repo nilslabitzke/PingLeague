@@ -1757,7 +1757,7 @@ function renderTournamentContent() {
       ${gMatches.map(m => {
         const p1=byId(m.player1_id), p2=byId(m.player2_id), done=m.winner_id!==null;
         const canEnter = !done && p1 && p2 && (S.isAdmin || m.player1_id===S.player?.id || m.player2_id===S.player?.id);
-        const canEdit  = done && S.isAdmin;
+        const canEdit  = done && (t.status !== 'finished' || S.isAdmin);
         const leg = m.is_return_match ? '<span style="font-size:.65rem;color:var(--text-dim)">↩</span>' : '';
         return `<div style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;border-bottom:1px solid var(--border)">
           ${leg}
@@ -1793,7 +1793,7 @@ function renderTournamentContent() {
         ${pm.map(m => {
           const p1=byId(m.player1_id), p2=byId(m.player2_id), done=m.winner_id!==null;
           const canEnter = !done && p1 && p2 && (S.isAdmin || m.player1_id===S.player?.id || m.player2_id===S.player?.id);
-          const canEdit  = done && S.isAdmin;
+          const canEdit  = done && (t.status !== 'finished' || S.isAdmin);
           return `<div style="display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--border)">
             <span style="flex:1;font-size:.88rem;${m.winner_id===m.player1_id?'font-weight:800':''}">${p1?esc(p1.name):'TBD'}</span>
             ${done?`<span style="font-size:1rem;font-weight:800">${m.score1}:${m.score2}</span>`
