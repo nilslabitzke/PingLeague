@@ -810,19 +810,23 @@ function updateLastUpdated() {
 }
 
 // ── AUTO-REFRESH ──────────────────────────────────────────────────────────
-async function _doRefresh() {
+async function _doRefresh(rerenderProfile = false) {
   if (!S.user) return;
   const ok = await loadPlayers();
   if (ok) {
+    // Keep S.player in sync with latest player data
+    if (S.player) S.player = S.players.find(p => p.id === S.player.id) || S.player;
     renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
-    if ($el('view-profile')?.classList.contains('active')) renderProfileView();
+    // Only re-render profile view when explicitly requested (tab-switch / visibility change)
+    // Never from the background interval — it resets innerHTML to "Lade…" every 2 min
+    if (rerenderProfile && $el('view-profile')?.classList.contains('active')) renderProfileView();
   }
 }
-// Stale-check variant used on tab-switch (avoid refreshing on every brief switch)
+// Stale-check variant used on tab-switch (rerenders profile since user just returned)
 async function autoRefreshIfStale() {
   if (!S.user) return;
   const ts = getCachedTs();
-  if (!ts || Date.now() - ts > AUTO_REFRESH_MS) await _doRefresh();
+  if (!ts || Date.now() - ts > AUTO_REFRESH_MS) await _doRefresh(true);
 }
 function byId(id) { return S.players.find(p => p.id === id); }
 function fmtClub(p) { return [p?.club, p?.city].filter(Boolean).join(', '); }
@@ -2640,8 +2644,8 @@ function init() {
     if (!document.hidden) autoRefreshIfStale();
   });
 
-  // Auto-Refresh: alle 2 Minuten — immer, kein Stale-Check nötig
-  setInterval(_doRefresh, AUTO_REFRESH_MS);
+  // Auto-Refresh: alle 2 Minuten — immer, kein Stale-Check nötig (kein Profile-Rerender)
+  setInterval(() => _doRefresh(false), AUTO_REFRESH_MS);
 }
 init();
 </script>
