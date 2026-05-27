@@ -809,18 +809,20 @@ function updateLastUpdated() {
   else el.textContent=`Zuletzt aktualisiert: vor ${diffDays} Tag${diffDays!==1?'en':''}`;
 }
 
-// ── AUTO-REFRESH (wöchentlich) ────────────────────────────────────────────
+// ── AUTO-REFRESH ──────────────────────────────────────────────────────────
+async function _doRefresh() {
+  if (!S.user) return;
+  const ok = await loadPlayers();
+  if (ok) {
+    renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
+    if ($el('view-profile')?.classList.contains('active')) renderProfileView();
+  }
+}
+// Stale-check variant used on tab-switch (avoid refreshing on every brief switch)
 async function autoRefreshIfStale() {
   if (!S.user) return;
   const ts = getCachedTs();
-  if (!ts || Date.now() - ts > AUTO_REFRESH_MS) {
-    const ok = await loadPlayers();
-    if (ok) {
-      renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
-      // Re-render profile view so own stats are current too
-      if ($el('view-profile')?.classList.contains('active')) renderProfileView();
-    }
-  }
+  if (!ts || Date.now() - ts > AUTO_REFRESH_MS) await _doRefresh();
 }
 function byId(id) { return S.players.find(p => p.id === id); }
 function fmtClub(p) { return [p?.club, p?.city].filter(Boolean).join(', '); }
@@ -2633,13 +2635,13 @@ function init() {
   $el('login-email').addEventListener('keydown',e=>e.key==='Enter'&&doLogin());
   $el('reg-pw').addEventListener('keydown',e=>e.key==='Enter'&&doRegister());
 
-  // Auto-Refresh: wenn Tab wieder sichtbar wird, prüfen ob Daten veraltet sind
+  // Auto-Refresh: wenn Tab wieder sichtbar wird, nur wenn Daten veraltet sind
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) autoRefreshIfStale();
   });
 
-  // Auto-Refresh: alle 2 Minuten (für lange offene Tabs)
-  setInterval(autoRefreshIfStale, AUTO_REFRESH_MS);
+  // Auto-Refresh: alle 2 Minuten — immer, kein Stale-Check nötig
+  setInterval(_doRefresh, AUTO_REFRESH_MS);
 }
 init();
 </script>
