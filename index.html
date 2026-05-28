@@ -634,6 +634,31 @@
   </div>
 </div>
 
+<!-- EDIT PROFILE MODAL -->
+<div class="tr-overlay" id="edit-overlay" onclick="if(event.target===this)closeEditProfile()">
+  <div class="tr-sheet">
+    <div style="font-size:.95rem;font-weight:800;text-align:center;margin-bottom:.75rem">✏️ Profil bearbeiten</div>
+    <div id="edit-alert"></div>
+    <input type="hidden" id="edit-player-id">
+    <div class="form-group">
+      <label>Name <span style="color:var(--error)">*</span></label>
+      <input type="text" id="edit-name" placeholder="Vollständiger Name" autocomplete="off">
+    </div>
+    <div class="form-group">
+      <label>Verein <span style="color:var(--text-dim)">(optional)</span></label>
+      <input type="text" id="edit-club" placeholder="z.B. TTC Musterstadt" autocomplete="off">
+    </div>
+    <div class="form-group" style="margin-bottom:.75rem">
+      <label>Stadt <span style="color:var(--text-dim)">(optional)</span></label>
+      <input type="text" id="edit-city" placeholder="z.B. München" autocomplete="off">
+    </div>
+    <div style="display:flex;gap:.5rem">
+      <button class="btn btn-secondary btn-full" onclick="closeEditProfile()">Abbrechen</button>
+      <button class="btn btn-primary btn-full" id="btn-save-edit" onclick="saveEditProfile()">Speichern</button>
+    </div>
+  </div>
+</div>
+
 <!-- PROFILE MODAL -->
 <div class="profile-overlay" id="profile-overlay" onclick="closeProfile(event)">
   <div class="profile-sheet" id="profile-sheet">
@@ -829,6 +854,74 @@ async function autoRefreshIfStale() {
   const ts = getCachedTs();
   if (!ts || Date.now() - ts > AUTO_REFRESH_MS) await _doRefresh(true);
 }
+
+// ── SUPABASE REALTIME ─────────────────────────────────────────────────────
+let _realtimeChannel = null;
+let _refreshDebounce = null;
+function _scheduleRefresh() {
+  // Debounce: mehrere schnell aufeinanderfolgende Events zusammenfassen
+  if (_refreshDebounce) clearTimeout(_refreshDebounce);
+  _refreshDebounce = setTimeout(() => { _refreshDebounce = null; _doRefresh(false); }, 600);
+}
+function setupRealtime() {
+  if (_realtimeChannel) { db.removeChannel(_realtimeChannel); _realtimeChannel = null; }
+  _realtimeChannel = db.channel('pl-live')
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'matches' },           _scheduleRefresh)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'tournament_matches' }, _scheduleRefresh)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'players' },            _scheduleRefresh)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches' },            _scheduleRefresh)
+    .subscribe();
+}
+function teardownRealtime() {
+  if (_realtimeChannel) { db.removeChannel(_realtimeChannel); _realtimeChannel = null; }
+  if (_refreshDebounce) { clearTimeout(_refreshDebounce); _refreshDebounce = null; }
+}
+
+// ── PROFIL BEARBEITEN ─────────────────────────────────────────────────────
+function openEditProfile(playerId) {
+  const p = byId(playerId);
+  if (!p) return;
+  if (!S.isAdmin && S.player?.id !== playerId) return; // Sicherheitscheck im Frontend
+  $el('edit-player-id').value = playerId;
+  $el('edit-name').value = p.name  || '';
+  $el('edit-club').value = p.club  || '';
+  $el('edit-city').value = p.city  || '';
+  $el('edit-alert').innerHTML = '';
+  $el('edit-overlay').classList.add('open');
+  setTimeout(() => $el('edit-name').focus(), 120);
+}
+function closeEditProfile() { $el('edit-overlay').classList.remove('open'); }
+async function saveEditProfile() {
+  const playerId = $el('edit-player-id').value;
+  const name = $el('edit-name').value.trim();
+  const club = $el('edit-club').value.trim() || null;
+  const city = $el('edit-city').value.trim() || null;
+  if (!name) {
+    $el('edit-alert').innerHTML = '<div class="alert alert-error">Name darf nicht leer sein.</div>';
+    return;
+  }
+  const btn = $el('btn-save-edit');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Speichern…';
+  const { error } = await db.rpc('update_player_profile', {
+    p_player_id: playerId, p_name: name, p_club: club, p_city: city
+  });
+  btn.disabled = false; btn.innerHTML = 'Speichern';
+  if (error) {
+    $el('edit-alert').innerHTML = `<div class="alert alert-error">${esc(error.message)}</div>`;
+    return;
+  }
+  closeEditProfile();
+  toast('Profil aktualisiert ✓', 'success');
+  await loadPlayers();
+  if (S.player?.id === playerId) {
+    S.player = byId(playerId) || S.player;
+    applyPlayerData(S.player, S.user);
+  }
+  renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
+  if ($el('view-profile')?.classList.contains('active')) renderProfileView();
+  if (S.isAdmin) renderAdminPlayers();
+}
+
 function byId(id) { return S.players.find(p => p.id === id); }
 function fmtClub(p) { return [p?.club, p?.city].filter(Boolean).join(', '); }
 function $el(id) { return document.getElementById(id); }
@@ -945,6 +1038,7 @@ async function doLogout() {
   _setupSession++;
   S.user=null; S.player=null; S.isAdmin=false;
   try { localStorage.removeItem(MY_PLAYER_KEY); } catch(e) {}
+  teardownRealtime();
   showPage('auth');
   try { await db.auth.signOut(); } catch(e) { console.error('signOut:', e); }
 }
@@ -1018,6 +1112,7 @@ async function setupUser(user) {
   renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
   loadChallenges();      // load badge in background
   if (S.isAdmin) loadAdminReports(); // load report badge for admin
+  setupRealtime();       // live updates via WebSocket
   // Show profile tab first so the user lands on their own profile
   showView('profile');
 }
@@ -1594,7 +1689,10 @@ function renderAdminPlayers() {
       <td><span class="level-badge" style="color:${col};background:${col}18">${lvl.toFixed(1)}</span></td>
       <td>${p.matches}</td>
       <td>${p.is_admin?'<span class="badge badge-admin">Admin</span>':''}</td>
-      <td><button class="btn btn-danger btn-sm" onclick="resetPlayerElo('${p.id}','${esc(p.name)}')">Reset</button></td>
+      <td style="display:flex;gap:.35rem;flex-wrap:wrap">
+        <button class="btn btn-secondary btn-sm" onclick="openEditProfile('${p.id}')">✏️</button>
+        <button class="btn btn-danger btn-sm" onclick="resetPlayerElo('${p.id}','${esc(p.name)}')">Reset</button>
+      </td>
     </tr>`;
   }).join('');
 }
@@ -2270,8 +2368,9 @@ async function renderProfileView() {
             <div style="font-size:.82rem"><span style="color:var(--text-muted)">Matches</span> <span style="font-weight:700">${p.matches}</span></div>
             <div style="font-size:.82rem"><span style="color:var(--text-muted)">Elo</span> <span style="font-weight:700">${p.elo}</span></div>
             <div id="pv-form-indicator" style="min-height:1.2rem"></div>
-            <div style="margin-top:.35rem">
+            <div style="margin-top:.35rem;display:flex;gap:.4rem;flex-wrap:wrap">
               <button class="btn btn-primary btn-sm" onclick="showView('match')" style="font-size:.78rem;padding:.3rem .8rem">➕ Match eintragen</button>
+              <button class="btn btn-secondary btn-sm" onclick="openEditProfile('${p.id}')" style="font-size:.78rem;padding:.3rem .8rem">✏️ Bearbeiten</button>
             </div>
           </div>
         </div>
