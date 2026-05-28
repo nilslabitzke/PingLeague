@@ -147,6 +147,12 @@
 
     /* RANKING TABLE */
     .ranking-table-wrapper { overflow-x:auto; border-radius:var(--radius); border:1px solid var(--border); }
+    .league-tabs { display:flex; gap:.4rem; flex-wrap:wrap; margin-bottom:.85rem; }
+    .ltab { padding:.3rem .8rem; border-radius:999px; font-size:.8rem; font-weight:600; border:1.5px solid var(--border); background:var(--surface); color:var(--text-muted); cursor:pointer; transition:all .15s; }
+    .ltab:hover { border-color:var(--primary); color:var(--primary); }
+    .ltab.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+    .league-row { display:flex; align-items:center; justify-content:space-between; padding:.4rem .6rem; border-radius:var(--radius-sm); background:var(--surface); margin-bottom:.35rem; gap:.5rem; }
+    .league-row:last-child { margin-bottom:0; }
     table { width:100%; border-collapse:collapse; min-width:520px; }
     thead th { background:var(--card); padding:.7rem 1rem; text-align:left; font-size:.75rem; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--text-muted); }
     tbody tr { border-top:1px solid var(--border); transition:background .15s; cursor:pointer; }
@@ -437,6 +443,9 @@
         </div>
       </div>
       <div id="month-banner-wrap"></div>
+      <div class="league-tabs" id="league-tabs">
+        <button class="ltab active" onclick="selectLeague('')">🌐 Gesamt</button>
+      </div>
       <div class="ranking-table-wrapper">
         <table>
           <thead><tr><th style="width:44px">#</th><th>Spieler</th><th>Level</th><th>Form</th><th>S / N</th><th>Matches</th></tr></thead>
@@ -536,6 +545,17 @@
         <div class="card" style="grid-column:1/-1" id="admin-reports-card">
           <div class="card-title">🚩 Gemeldete Matches <span id="admin-reports-badge" class="ch-badge" style="position:static;margin-left:.4rem;vertical-align:middle"></span></div>
           <div id="admin-reports-list"><div class="text-muted" style="font-size:.85rem">Keine offenen Meldungen.</div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">📍 Ligen verwalten</div>
+          <div id="admin-leagues-list" style="margin-bottom:.75rem"></div>
+          <div style="display:flex;gap:.5rem;align-items:flex-end">
+            <div class="form-group" style="flex:1;margin-bottom:0">
+              <label style="font-size:.78rem">Name der Liga</label>
+              <input type="text" id="new-league-name" placeholder="z.B. Hamburg" autocomplete="off">
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="createLeagueAdmin()" style="flex-shrink:0;height:38px">+ Erstellen</button>
+          </div>
         </div>
         <div class="card">
           <div class="card-title">K-Faktor</div>
@@ -722,7 +742,7 @@ const SUPABASE_URL = 'https://xsxsyfaxhwrbllvvfxxm.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzeHN5ZmF4aHdyYmxsdnZmeHhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MTM1NzIsImV4cCI6MjA5NTE4OTU3Mn0.y35dDJTrkCNMU7P0V4H8iSMprITdRst9kl7B5_BMvc8';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storage:window.localStorage } });
 
-let S = { user:null, player:null, isAdmin:false, players:[], challenges:[], tournaments:[], currentTournament:null, settings:{ k_high:32, k_low:16 }, reportCount:0 };
+let S = { user:null, player:null, isAdmin:false, players:[], challenges:[], tournaments:[], currentTournament:null, settings:{ k_high:32, k_low:16 }, reportCount:0, leagues:[], memberships:[], currentLeague:'' };
 
 // ── THEME ────────────────────────────────────────────────────────────────
 function applyTheme(theme) {
@@ -875,6 +895,102 @@ function setupRealtime() {
 function teardownRealtime() {
   if (_realtimeChannel) { db.removeChannel(_realtimeChannel); _realtimeChannel = null; }
   if (_refreshDebounce) { clearTimeout(_refreshDebounce); _refreshDebounce = null; }
+}
+
+// ── LIGEN ────────────────────────────────────────────────────────────────
+async function loadLeagues() {
+  const [lRes, mRes] = await Promise.all([
+    withTimeout(db.from('leagues').select('*').order('name'), 8000, {data:null}),
+    withTimeout(db.from('league_memberships').select('*'), 8000, {data:null})
+  ]);
+  S.leagues = lRes?.data || [];
+  S.memberships = mRes?.data || [];
+  renderLeagueTabs();
+  renderAdminLeagues();
+  // Refresh pv-leagues if profile is open
+  if ($el('pv-leagues') && S.player) $el('pv-leagues').innerHTML = renderLeaguesMini(S.player.id);
+}
+
+function renderLeagueTabs() {
+  const el = $el('league-tabs'); if (!el) return;
+  el.innerHTML =
+    `<button class="ltab${!S.currentLeague?' active':''}" onclick="selectLeague('')">🌐 Gesamt (${S.players.length})</button>` +
+    S.leagues.map(l => {
+      const count = S.memberships.filter(m => m.league_id === l.id).length;
+      return `<button class="ltab${S.currentLeague===l.id?' active':''}" onclick="selectLeague('${l.id}')">📍 ${esc(l.name)} (${count})</button>`;
+    }).join('');
+}
+
+function selectLeague(leagueId) {
+  S.currentLeague = leagueId;
+  renderLeagueTabs();
+  renderRanking();
+}
+
+function renderLeaguesMini(playerId) {
+  if (!S.leagues.length) return '<div class="text-muted" style="font-size:.85rem">Noch keine Ligen verfügbar.</div>';
+  const isOwn = playerId === S.player?.id;
+  return S.leagues.map(l => {
+    const isMember = S.memberships.some(m => m.league_id === l.id && m.player_id === playerId);
+    const count = S.memberships.filter(m => m.league_id === l.id).length;
+    return `<div class="league-row">
+      <div>
+        <span style="font-weight:600;font-size:.88rem">📍 ${esc(l.name)}</span>
+        ${l.city ? `<span style="color:var(--text-muted);font-size:.78rem;margin-left:.35rem">${esc(l.city)}</span>` : ''}
+        <span style="color:var(--text-dim);font-size:.75rem;margin-left:.4rem">${count} Spieler</span>
+      </div>
+      ${isOwn ? `<button class="btn btn-sm ${isMember?'btn-secondary':'btn-primary'}" style="font-size:.76rem;padding:.25rem .6rem" onclick="toggleLeagueMembership('${l.id}')">
+        ${isMember ? 'Austreten' : 'Beitreten'}
+      </button>` : `<span style="font-size:.8rem;font-weight:600;color:${isMember?'var(--success)':'var(--text-dim)'}">${isMember?'✓ Mitglied':'—'}</span>`}
+    </div>`;
+  }).join('');
+}
+
+async function toggleLeagueMembership(leagueId) {
+  if (!S.player) return;
+  const isMember = S.memberships.some(m => m.league_id === leagueId && m.player_id === S.player.id);
+  const { error } = await db.rpc(isMember ? 'leave_league' : 'join_league', { p_league_id: leagueId });
+  if (error) { toast(`Fehler: ${error.message}`, 'error'); return; }
+  toast(isMember ? 'Liga verlassen' : 'Liga beigetreten ✓', 'success');
+  await loadLeagues();
+  renderRanking();
+}
+
+function renderAdminLeagues() {
+  const el = $el('admin-leagues-list'); if (!el) return;
+  if (!S.leagues.length) { el.innerHTML = '<div class="text-muted" style="font-size:.85rem">Noch keine Ligen.</div>'; return; }
+  el.innerHTML = S.leagues.map(l => {
+    const count = S.memberships.filter(m => m.league_id === l.id).length;
+    return `<div class="league-row">
+      <div>
+        <span style="font-weight:600;font-size:.88rem">${esc(l.name)}</span>
+        ${l.city ? `<span style="color:var(--text-muted);font-size:.78rem;margin-left:.3rem">${esc(l.city)}</span>` : ''}
+        <span style="color:var(--text-dim);font-size:.75rem;margin-left:.3rem">${count} Mitglieder</span>
+      </div>
+      <button class="btn btn-danger btn-sm" style="font-size:.74rem;padding:.2rem .5rem" onclick="deleteLeague('${l.id}','${esc(l.name)}')">🗑</button>
+    </div>`;
+  }).join('');
+}
+
+async function createLeagueAdmin() {
+  if (!S.isAdmin) return;
+  const name = $el('new-league-name').value.trim();
+  if (!name) { toast('Bitte einen Namen eingeben.', 'error'); return; }
+  const { error } = await db.rpc('create_league', { p_name: name });
+  if (error) { toast(`Fehler: ${error.message}`, 'error'); return; }
+  $el('new-league-name').value = '';
+  toast(`Liga „${name}" erstellt ✓`, 'success');
+  await loadLeagues();
+}
+
+async function deleteLeague(leagueId, name) {
+  if (!confirm(`Liga „${name}" und alle Mitgliedschaften löschen?`)) return;
+  const { error } = await db.rpc('delete_league', { p_league_id: leagueId });
+  if (error) { toast(`Fehler: ${error.message}`, 'error'); return; }
+  toast(`Liga „${name}" gelöscht`, 'success');
+  if (S.currentLeague === leagueId) S.currentLeague = '';
+  await loadLeagues();
+  renderRanking();
 }
 
 // ── PROFIL BEARBEITEN ─────────────────────────────────────────────────────
@@ -1112,6 +1228,7 @@ async function setupUser(user) {
   renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
   loadChallenges();      // load badge in background
   if (S.isAdmin) loadAdminReports(); // load report badge for admin
+  loadLeagues();         // load leagues + memberships
   setupRealtime();       // live updates via WebSocket
   // Show profile tab first so the user lands on their own profile
   showView('profile');
@@ -1138,10 +1255,21 @@ function renderRanking() {
   updateLastUpdated();
 
   const tbody=$el('ranking-tbody');
-  if (!S.players.length) { tbody.innerHTML='<tr><td colspan="6" class="text-center text-muted" style="padding:2rem">Noch keine Spieler.</td></tr>'; return; }
+
+  // ── Filter by selected league ─────────────────────────────────────────
+  let players = S.players;
+  if (S.currentLeague) {
+    const memberIds = new Set(S.memberships.filter(m => m.league_id === S.currentLeague).map(m => m.player_id));
+    players = players.filter(p => memberIds.has(p.id));
+  }
+
+  if (!players.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted" style="padding:2rem">${S.currentLeague ? 'Noch keine Spieler in dieser Liga.' : 'Noch keine Spieler.'}</td></tr>`;
+    return;
+  }
 
   // ── Render rows instantly (no DB calls, no waiting) ───────────────────
-  tbody.innerHTML = S.players.map((p,i) => {
+  tbody.innerHTML = players.map((p,i) => {
     const rank=i+1, lvl=eloToLevel(p.elo), col=levelColor(lvl), ac=avatarCol(p.name);
     const isMe = S.player&&p.id===S.player.id;
     return `<tr class="${isMe?'is-me':''}" onclick="openProfile('${p.id}')">
@@ -1163,7 +1291,7 @@ function renderRanking() {
     8000, {data: null}
   ).then(res => {
     const recent = res?.data || [];
-    S.players.forEach(p => {
+    players.forEach(p => {
       const el = document.getElementById('fdots-' + p.id);
       if (el) el.innerHTML = buildFormDots(p.id, recent);
     });
@@ -2409,6 +2537,11 @@ async function renderProfileView() {
     <div class="card" style="margin-bottom:1rem">
       <div class="card-title">🕐 Letzte Matches</div>
       <div id="pv-matches"><div class="text-muted" style="font-size:.88rem">Lade…</div></div>
+    </div>
+
+    <div class="card" style="margin-bottom:1rem">
+      <div class="card-title">📍 Ligen</div>
+      <div id="pv-leagues">${renderLeaguesMini(p.id)}</div>
     </div>
 
     <div class="card" id="pv-stats-card">
