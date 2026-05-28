@@ -869,7 +869,8 @@ function withTimeout(promise, ms, fallback) {
   return Promise.race([promise, new Promise(r => setTimeout(() => r(fallback), ms))]);
 }
 // ── PLAYER CACHE (localStorage) ───────────────────────────────────────────
-const PL_CACHE = 'pl_v1';
+const PL_CACHE        = 'pl_v1';
+const PL_LEAGUES_CACHE = 'pl_leagues_v1';
 const AUTO_REFRESH_MS = 2 * 60 * 1000; // 2 minutes — always fresh on reload + tab-switch
 function getCachedPlayers() {
   try { const c=JSON.parse(localStorage.getItem(PL_CACHE)||'null'); return c?.data||null; } catch(e){return null;}
@@ -879,6 +880,12 @@ function getCachedTs() {
 }
 function setCachedPlayers(data) {
   try { localStorage.setItem(PL_CACHE, JSON.stringify({data, ts:Date.now()})); } catch(e){}
+}
+function getCachedLeagues() {
+  try { const c=JSON.parse(localStorage.getItem(PL_LEAGUES_CACHE)||'null'); return c||null; } catch(e){return null;}
+}
+function setCachedLeagues(leagues, memberships) {
+  try { localStorage.setItem(PL_LEAGUES_CACHE, JSON.stringify({leagues, memberships})); } catch(e){}
 }
 function updateLastUpdated() {
   const el=$el('ranking-last-updated'); if(!el) return;
@@ -934,17 +941,28 @@ function teardownRealtime() {
 }
 
 // ── LIGEN ────────────────────────────────────────────────────────────────
+function _applyLeagues(leagues, memberships) {
+  S.leagues     = leagues;
+  S.memberships = memberships;
+  renderLeagueTabs();
+  renderAdminLeagues();
+  if ($el('pv-leagues') && S.player) $el('pv-leagues').innerHTML = renderLeaguesMini(S.player.id);
+}
+
 async function loadLeagues() {
+  // 1) Serve from cache immediately so tabs appear at once
+  const cached = getCachedLeagues();
+  if (cached?.leagues) _applyLeagues(cached.leagues, cached.memberships || []);
+
+  // 2) Fetch fresh data in background
   const [lRes, mRes] = await Promise.all([
     withTimeout(db.from('leagues').select('*').order('name'), 8000, {data:null}),
     withTimeout(db.from('league_memberships').select('*'), 8000, {data:null})
   ]);
-  S.leagues = lRes?.data || [];
-  S.memberships = mRes?.data || [];
-  renderLeagueTabs();
-  renderAdminLeagues();
-  // Refresh pv-leagues if profile is open
-  if ($el('pv-leagues') && S.player) $el('pv-leagues').innerHTML = renderLeaguesMini(S.player.id);
+  const leagues     = lRes?.data || S.leagues;
+  const memberships = mRes?.data || S.memberships;
+  setCachedLeagues(leagues, memberships);  // persist for next load
+  _applyLeagues(leagues, memberships);
 }
 
 function renderLeagueTabs() {
@@ -1289,6 +1307,7 @@ async function doLogout() {
   _setupSession++;
   S.user=null; S.player=null; S.isAdmin=false;
   try { localStorage.removeItem(MY_PLAYER_KEY); } catch(e) {}
+  try { localStorage.removeItem(PL_LEAGUES_CACHE); } catch(e) {}
   teardownRealtime();
   showPage('auth');
   try { await db.auth.signOut(); } catch(e) { console.error('signOut:', e); }
@@ -2983,7 +3002,14 @@ function init() {
         S.players = cachedPlayers;
         S.player  = myPlayer;
         S.isAdmin = myPlayer.is_admin || false;
+        // Also restore leagues from cache so tabs appear instantly
+        const cachedLeagues = getCachedLeagues();
+        if (cachedLeagues?.leagues) {
+          S.leagues     = cachedLeagues.leagues;
+          S.memberships = cachedLeagues.memberships || [];
+        }
         renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
+        renderLeagueTabs();
         showPage('app');   // dismiss loading spinner instantly
         showView('profile');
       }
