@@ -346,7 +346,7 @@
       <h1>🏓 PingLeague</h1>
       <p>Das Tischtennis-Ranking für dein Team</p>
     </div>
-    <div class="auth-tabs">
+    <div class="auth-tabs" id="auth-tabs-bar">
       <button class="auth-tab active" id="tab-login" onclick="switchTab('login')">Anmelden</button>
       <button class="auth-tab" id="tab-reg" onclick="switchTab('register')">Registrieren</button>
     </div>
@@ -355,6 +355,31 @@
       <div class="form-group"><label>E-Mail</label><input type="email" id="login-email" placeholder="deine@email.de" autocomplete="email"></div>
       <div class="form-group"><label>Passwort</label><input type="password" id="login-pw" placeholder="••••••••" autocomplete="current-password"></div>
       <button class="btn btn-primary btn-full" id="btn-login" onclick="doLogin()">Anmelden</button>
+      <div style="text-align:center;margin-top:.75rem">
+        <button onclick="switchTab('reset')" style="background:none;border:none;color:var(--text-muted);font-size:.82rem;cursor:pointer;text-decoration:underline;padding:0">Passwort vergessen?</button>
+      </div>
+    </div>
+    <div id="form-reset" class="auth-form" style="display:none">
+      <div style="text-align:center;margin-bottom:1rem">
+        <div style="font-size:1.6rem">🔑</div>
+        <div style="font-weight:700;margin-top:.25rem">Passwort zurücksetzen</div>
+        <div style="font-size:.83rem;color:var(--text-muted);margin-top:.3rem">Du bekommst einen Link per E-Mail.</div>
+      </div>
+      <div id="reset-alert"></div>
+      <div class="form-group"><label>E-Mail</label><input type="email" id="reset-email" placeholder="deine@email.de" autocomplete="email"></div>
+      <button class="btn btn-primary btn-full" id="btn-reset" onclick="doForgotPassword()">Link senden</button>
+      <button onclick="switchTab('login')" style="width:100%;margin-top:.5rem;background:none;border:none;color:var(--text-muted);font-size:.83rem;cursor:pointer;padding:.4rem">← Zurück zur Anmeldung</button>
+    </div>
+    <div id="form-newpw" class="auth-form" style="display:none">
+      <div style="text-align:center;margin-bottom:1rem">
+        <div style="font-size:1.6rem">🔒</div>
+        <div style="font-weight:700;margin-top:.25rem">Neues Passwort wählen</div>
+        <div style="font-size:.83rem;color:var(--text-muted);margin-top:.3rem">Mindestens 6 Zeichen.</div>
+      </div>
+      <div id="newpw-alert"></div>
+      <div class="form-group"><label>Neues Passwort</label><input type="password" id="new-pw" placeholder="••••••••" autocomplete="new-password"></div>
+      <div class="form-group"><label>Passwort wiederholen</label><input type="password" id="new-pw2" placeholder="••••••••" autocomplete="new-password"></div>
+      <button class="btn btn-primary btn-full" id="btn-newpw" onclick="doSetNewPassword()">Passwort speichern</button>
     </div>
     <div id="form-register" class="auth-form" style="display:none">
       <div id="reg-alert"></div>
@@ -1071,8 +1096,52 @@ function toast(msg, type='info') {
 function switchTab(tab) {
   $el('tab-login').classList.toggle('active', tab==='login');
   $el('tab-reg').classList.toggle('active', tab==='register');
-  $el('form-login').style.display = tab==='login' ? 'block' : 'none';
-  $el('form-register').style.display = tab==='register' ? 'block' : 'none';
+  $el('form-login').style.display    = tab==='login'     ? 'block' : 'none';
+  $el('form-register').style.display = tab==='register'  ? 'block' : 'none';
+  $el('form-reset').style.display    = tab==='reset'     ? 'block' : 'none';
+  $el('form-newpw').style.display    = tab==='newpw'     ? 'block' : 'none';
+  // Hide tab bar on password-flow screens
+  $el('auth-tabs-bar').style.display = (tab==='reset'||tab==='newpw') ? 'none' : '';
+}
+
+async function doForgotPassword() {
+  const email = $val('reset-email').trim();
+  const al    = $el('reset-alert');
+  al.innerHTML = '';
+  if (!email) { al.innerHTML = '<div class="alert alert-error">Bitte E-Mail eingeben.</div>'; return; }
+  const btn = $el('btn-reset');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Sende…';
+  const {error} = await db.auth.resetPasswordForEmail(email, {
+    redirectTo: location.href   // token lands back on this page → PASSWORD_RECOVERY fires
+  });
+  btn.disabled = false; btn.innerHTML = 'Link senden';
+  if (error) {
+    al.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+  } else {
+    al.innerHTML = '<div class="alert alert-success">Link gesendet! Schau in dein Postfach.</div>';
+    $el('reset-email').value = '';
+  }
+}
+
+async function doSetNewPassword() {
+  const pw  = $val('new-pw');
+  const pw2 = $val('new-pw2');
+  const al  = $el('newpw-alert');
+  al.innerHTML = '';
+  if (!pw || !pw2) { al.innerHTML = '<div class="alert alert-error">Bitte beide Felder ausfüllen.</div>'; return; }
+  if (pw !== pw2)  { al.innerHTML = '<div class="alert alert-error">Passwörter stimmen nicht überein.</div>'; return; }
+  if (pw.length < 6) { al.innerHTML = '<div class="alert alert-error">Mindestens 6 Zeichen erforderlich.</div>'; return; }
+  const btn = $el('btn-newpw');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Speichere…';
+  const {error} = await db.auth.updateUser({password: pw});
+  btn.disabled = false; btn.innerHTML = 'Passwort speichern';
+  if (error) {
+    al.innerHTML = `<div class="alert alert-error">${error.message}</div>`;
+  } else {
+    toast('✓ Passwort gespeichert!', 'success');
+    $el('new-pw').value = ''; $el('new-pw2').value = '';
+    // Session is now active — setupUser will fire via onAuthStateChange
+  }
 }
 
 async function doLogin() {
@@ -2859,6 +2928,11 @@ function init() {
     if(event==='SIGNED_OUT'){
       _setupSession++; // abort any in-flight setupUser
       S.user=null;S.player=null;S.isAdmin=false;_initialized=false;showPage('auth');
+    } else if(event==='PASSWORD_RECOVERY'){
+      // User clicked the reset link — show new-password form
+      _initialized=true;
+      showPage('auth');
+      switchTab('newpw');
     } else if(session?.user){
       // Run setupUser if: no user loaded yet, OR a different user signed in
       const needsSetup = !S.user || S.user.id!==session.user.id;
@@ -2875,6 +2949,8 @@ function init() {
   $el('login-pw').addEventListener('keydown',e=>e.key==='Enter'&&doLogin());
   $el('login-email').addEventListener('keydown',e=>e.key==='Enter'&&doLogin());
   $el('reg-pw').addEventListener('keydown',e=>e.key==='Enter'&&doRegister());
+  $el('reset-email').addEventListener('keydown',e=>e.key==='Enter'&&doForgotPassword());
+  $el('new-pw2').addEventListener('keydown',e=>e.key==='Enter'&&doSetNewPassword());
 
   // Auto-Refresh: wenn Tab wieder sichtbar wird, nur wenn Daten veraltet sind
   document.addEventListener('visibilitychange', () => {
