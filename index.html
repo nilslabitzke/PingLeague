@@ -704,6 +704,17 @@
   </div>
 </div>
 
+<!-- LIGA SPIELER ZUORDNEN -->
+<div class="tr-overlay" id="league-assign-overlay" onclick="if(event.target===this)closeLeagueAssign()">
+  <div class="tr-sheet" style="max-width:440px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <div style="font-size:.95rem;font-weight:800" id="league-assign-title">Spieler zuordnen</div>
+      <button onclick="closeLeagueAssign()" style="background:none;border:none;color:var(--text-muted);font-size:1.1rem;cursor:pointer;padding:.1rem .35rem;line-height:1">✕</button>
+    </div>
+    <div id="league-assign-body" style="max-height:55vh;overflow-y:auto"></div>
+  </div>
+</div>
+
 <!-- PROFILE MODAL -->
 <div class="profile-overlay" id="profile-overlay" onclick="closeProfile(event)">
   <div class="profile-sheet" id="profile-sheet">
@@ -992,7 +1003,10 @@ function renderAdminLeagues() {
         ${l.city ? `<span style="color:var(--text-muted);font-size:.78rem;margin-left:.3rem">${esc(l.city)}</span>` : ''}
         <span style="color:var(--text-dim);font-size:.75rem;margin-left:.3rem">${count} Mitglieder</span>
       </div>
-      <button class="btn btn-danger btn-sm" style="font-size:.74rem;padding:.2rem .5rem" onclick="deleteLeague('${l.id}','${esc(l.name)}')">🗑</button>
+      <div style="display:flex;gap:.35rem">
+        <button class="btn btn-secondary btn-sm" style="font-size:.74rem;padding:.2rem .55rem" onclick="openLeagueAssign('${l.id}')">👥 Spieler</button>
+        <button class="btn btn-danger btn-sm" style="font-size:.74rem;padding:.2rem .5rem" onclick="deleteLeague('${l.id}','${esc(l.name)}')">🗑</button>
+      </div>
     </div>`;
   }).join('');
 }
@@ -1016,6 +1030,58 @@ async function deleteLeague(leagueId, name) {
   if (S.currentLeague === leagueId) S.currentLeague = '';
   await loadLeagues();
   renderRanking();
+}
+
+// ── LIGA SPIELER ZUORDNEN (Admin) ─────────────────────────────────────────
+let _assignLeagueId = null;
+
+function openLeagueAssign(leagueId) {
+  if (!S.isAdmin) return;
+  _assignLeagueId = leagueId;
+  const league = S.leagues.find(l => l.id === leagueId);
+  $el('league-assign-title').textContent = `Spieler in „${league?.name || '…'}"`;
+  renderLeagueAssignBody();
+  $el('league-assign-overlay').classList.add('open');
+}
+
+function closeLeagueAssign() {
+  $el('league-assign-overlay').classList.remove('open');
+  _assignLeagueId = null;
+}
+
+function renderLeagueAssignBody() {
+  const el = $el('league-assign-body');
+  if (!_assignLeagueId || !S.players.length) {
+    el.innerHTML = '<div class="text-muted" style="font-size:.85rem;padding:.5rem 0">Keine Spieler vorhanden.</div>';
+    return;
+  }
+  const sorted = [...S.players].sort((a,b) => (a.name||'').localeCompare(b.name||''));
+  el.innerHTML = sorted.map(p => {
+    const isMember = S.memberships.some(m => m.league_id === _assignLeagueId && m.player_id === p.id);
+    return `<div class="league-row">
+      <div>
+        <span style="font-weight:600;font-size:.88rem">${esc(p.name)}</span>
+        ${p.club ? `<span style="color:var(--text-muted);font-size:.78rem;margin-left:.35rem">${esc(p.club)}</span>` : ''}
+      </div>
+      <button class="btn btn-sm ${isMember ? 'btn-secondary' : 'btn-primary'}"
+        style="font-size:.76rem;padding:.25rem .65rem;min-width:76px"
+        onclick="adminToggleLeagueMember('${_assignLeagueId}','${p.id}')">
+        ${isMember ? '✓ Mitglied' : '+ Hinzufügen'}
+      </button>
+    </div>`;
+  }).join('');
+}
+
+async function adminToggleLeagueMember(leagueId, playerId) {
+  if (!S.isAdmin) return;
+  const isMember = S.memberships.some(m => m.league_id === leagueId && m.player_id === playerId);
+  const rpc = isMember ? 'admin_remove_from_league' : 'admin_add_to_league';
+  const { error } = await db.rpc(rpc, { p_league_id: leagueId, p_player_id: playerId });
+  if (error) { toast(`Fehler: ${error.message}`, 'error'); return; }
+  await loadLeagues();
+  renderLeagueAssignBody();  // re-render list without closing overlay
+  renderRanking();
+  renderAdminLeagues();
 }
 
 // ── PROFIL BEARBEITEN ─────────────────────────────────────────────────────
