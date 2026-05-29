@@ -1875,37 +1875,43 @@ async function loadPlayerEloHistory(playerId) {
 function renderEloChart(pts, limit) {
   // Filter out null/invalid elo entries
   const valid = (pts || []).filter(p => p.elo != null && isFinite(p.elo));
-  if (valid.length === 0) return '<p style="font-size:.82rem;color:var(--text-muted);text-align:center;padding:1.25rem 0;margin:0">Noch keine Elo-Daten vorhanden.</p>';
+  if (valid.length === 0) return '<p style="font-size:.82rem;color:var(--text-muted);text-align:center;padding:1.25rem 0;margin:0">Noch keine Level-Daten vorhanden.</p>';
 
   // Apply limit filter (show last N entries)
   const disp = (limit && limit < valid.length) ? valid.slice(-limit) : valid;
 
-  const W=480, H=148, pl=46, pr=14, pt=22, pb=24;
-  const iW=W-pl-pr, iH=H-pt-pb;
-  const elos = disp.map(p=>p.elo);
-  const rawMin=Math.min(...elos), rawMax=Math.max(...elos);
-  const spread = rawMax - rawMin;
-  const eloStep = spread<=20?10 : spread<=60?20 : spread<=150?50 : 100;
-  const pad = Math.max(eloStep*0.75, 8);
-  const minE = Math.floor((rawMin-pad)/eloStep)*eloStep;
-  const maxE = Math.ceil((rawMax+pad)/eloStep)*eloStep;
-  const range = maxE - minE || 1;
-  const cy = e => pt + iH - ((e-minE)/range)*iH;
-  const n = disp.length;
+  // Convert elo → level for all display points
+  const dispL = disp.map(p => ({ ...p, lvl: eloToLevel(p.elo) }));
+
+  const W=480, H=148, ptop=22, pb=24, pl=44, pr=14;
+  const iW=W-pl-pr, iH=H-ptop-pb;
+
+  const lvls = dispL.map(p => p.lvl);
+  const rawMin=Math.min(...lvls), rawMax=Math.max(...lvls);
+  // Y axis: 0.5-step grid, with a little padding
+  const lvlStep = 0.5;
+  const pad = lvlStep * 0.75;
+  const minL = Math.max(0.5, Math.floor((rawMin-pad)/lvlStep)*lvlStep);
+  const maxL = Math.min(7.0, Math.ceil((rawMax+pad)/lvlStep)*lvlStep);
+  const range = maxL - minL || 0.5;
+  const cy = l => ptop + iH - ((l-minL)/range)*iH;
+  const n = dispL.length;
   const cx = i => pl + (n<=1 ? iW/2 : (i/(n-1))*iW);
 
-  const linePoints = disp.map((p,i)=>`${cx(i).toFixed(1)},${cy(p.elo).toFixed(1)}`).join(' ');
-  const baseY = (pt+iH).toFixed(1);
+  const linePoints = dispL.map((p,i)=>`${cx(i).toFixed(1)},${cy(p.lvl).toFixed(1)}`).join(' ');
+  const baseY = (ptop+iH).toFixed(1);
   const areaPoints = `${cx(0).toFixed(1)},${baseY} ${linePoints} ${cx(n-1).toFixed(1)},${baseY}`;
 
+  // Y gridlines at each 0.5-level step
   const yLines = [];
-  for (let e=minE; e<=maxE; e+=eloStep) yLines.push({e, y:cy(e)});
+  for (let l=minL; l<=maxL+0.01; l=Math.round((l+lvlStep)*10)/10) yLines.push({l, y:cy(l)});
 
-  const currentElo = disp[n-1].elo;
+  const currentLvl = dispL[n-1].lvl;
+  const badgeCol = levelColor(currentLvl).replace('var(--','').replace(')',''); // css var name
+  // Resolve badge colour to a hex we can embed in SVG
+  const badgeHex = currentLvl>=6.0?'#40d8f8' : currentLvl>=4.5?'#90b8f0' : currentLvl>=3.5?'#f0c040' : currentLvl>=2.0?'#9eb0c8' : '#cd8b3e';
   const gradId = 'ecg' + (Math.random()*1e6|0);
-
-  // Badge position: top-right corner
-  const badgeW = 54, badgeH = 20, badgeX = W-pr-badgeW, badgeY = 2;
+  const badgeW = 46, badgeH = 20, badgeX = W-pr-badgeW, badgeY = 2;
 
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;overflow:visible">
   <defs>
@@ -1913,29 +1919,29 @@ function renderEloChart(pts, limit) {
       <stop offset="0%" stop-color="#7c7cf8" stop-opacity="0.32"/>
       <stop offset="85%" stop-color="#7c7cf8" stop-opacity="0.03"/>
     </linearGradient>
-    <clipPath id="${gradId}c"><rect x="${pl}" y="${pt}" width="${iW}" height="${iH}"/></clipPath>
+    <clipPath id="${gradId}c"><rect x="${pl}" y="${ptop}" width="${iW}" height="${iH}"/></clipPath>
   </defs>
-  <!-- Y gridlines + labels -->
+  <!-- Y gridlines + level labels -->
   ${yLines.map(l=>`
   <line x1="${pl}" y1="${l.y.toFixed(1)}" x2="${W-pr}" y2="${l.y.toFixed(1)}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3,3"/>
-  <text x="${(pl-7).toFixed(1)}" y="${(l.y+3.5).toFixed(1)}" text-anchor="end" font-size="9.5" fill="var(--text-muted)">${l.e}</text>`).join('')}
+  <text x="${(pl-5).toFixed(1)}" y="${(l.y+3.5).toFixed(1)}" text-anchor="end" font-size="9.5" fill="var(--text-muted)">${l.l.toFixed(1)}</text>`).join('')}
   <!-- Area fill -->
   <polygon points="${areaPoints}" fill="url(#${gradId})" clip-path="url(#${gradId}c)"/>
   <!-- Line -->
   ${n>1?`<polyline points="${linePoints}" fill="none" stroke="#7c7cf8" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`:''}
   <!-- Axis lines -->
-  <line x1="${pl}" y1="${pt}" x2="${pl}" y2="${pt+iH}" stroke="var(--border)" stroke-width="1"/>
-  <line x1="${pl}" y1="${(pt+iH).toFixed(1)}" x2="${W-pr}" y2="${(pt+iH).toFixed(1)}" stroke="var(--border)" stroke-width="1"/>
+  <line x1="${pl}" y1="${ptop}" x2="${pl}" y2="${ptop+iH}" stroke="var(--border)" stroke-width="1"/>
+  <line x1="${pl}" y1="${(ptop+iH).toFixed(1)}" x2="${W-pr}" y2="${(ptop+iH).toFixed(1)}" stroke="var(--border)" stroke-width="1"/>
   <!-- Dots (win=green, loss=red, start=grey) -->
-  ${disp.map((p,i)=>{
+  ${dispL.map((p,i)=>{
     const isLast = i===n-1;
     const col = isLast ? '#7c7cf8' : p.win===true ? '#3dd68c' : p.win===false ? '#ff6b6b' : '#6868a0';
     const r = isLast ? 5.5 : 3.5;
-    return `<circle cx="${cx(i).toFixed(1)}" cy="${cy(p.elo).toFixed(1)}" r="${r}" fill="${col}" stroke="var(--card)" stroke-width="1.5"/>`;
+    return `<circle cx="${cx(i).toFixed(1)}" cy="${cy(p.lvl).toFixed(1)}" r="${r}" fill="${col}" stroke="var(--card)" stroke-width="1.5"/>`;
   }).join('')}
-  <!-- Current Elo badge (top-right) -->
-  <rect x="${badgeX}" y="${badgeY}" width="${badgeW}" height="${badgeH}" rx="${badgeH/2}" fill="#7c7cf8"/>
-  <text x="${(badgeX+badgeW/2).toFixed(1)}" y="${(badgeY+13.5).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="800" fill="white">${currentElo}</text>
+  <!-- Current Level badge (top-right, coloured by tier) -->
+  <rect x="${badgeX}" y="${badgeY}" width="${badgeW}" height="${badgeH}" rx="${badgeH/2}" fill="${badgeHex}"/>
+  <text x="${(badgeX+badgeW/2).toFixed(1)}" y="${(badgeY+13.5).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="800" fill="white">${currentLvl.toFixed(1)}</text>
 </svg>`;
 }
 
