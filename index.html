@@ -188,7 +188,11 @@
     .set-tag.win { color:var(--success); background:rgba(61,214,140,.12); }
     .set-tag.loss { color:var(--error); background:rgba(255,107,107,.12); }
     .set-tag.invalid { color:var(--text-dim); }
-    #set3-row { display:none; }
+    #set3-row, #set4-row, #set5-row { display:none; }
+    .mode-btn { flex:1; min-width:90px; padding:.55rem .6rem; border:2px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); color:var(--text-muted); cursor:pointer; font-size:.82rem; font-weight:600; text-align:center; transition:all .18s; line-height:1.3; }
+    .mode-btn.active { border-color:var(--primary); background:rgba(124,124,248,.13); color:var(--primary-lt); }
+    .mode-btn:hover:not(.active) { border-color:var(--text-muted); background:var(--card-hover); color:var(--text); }
+    .mode-badge { display:inline-block; font-size:.68rem; font-weight:700; padding:.1rem .4rem; border-radius:999px; background:rgba(124,124,248,.15); color:var(--primary-lt); vertical-align:middle; margin-left:.3rem; }
 
     /* ELO PREVIEW */
     .win-bar-wrap { margin-bottom:1.1rem; }
@@ -492,12 +496,20 @@
 
     <!-- MATCH -->
     <div id="view-match" class="view">
-      <div class="view-header"><h2>Match eintragen</h2><p>Best of 3 · Sätze bis 11 · bei 10:10 bis +2</p></div>
+      <div class="view-header"><h2>Match eintragen</h2><p id="match-mode-desc">Best of 3 · Sätze bis 11 · bei 10:10 bis +2</p></div>
       <div class="match-form">
         <div class="card">
           <div class="card-title">Spieler</div>
           <div class="form-group"><label>Spieler 1</label><select id="m-p1" onchange="onPlayerChange()"></select></div>
           <div class="form-group"><label>Spieler 2 (Gegner)</label><select id="m-p2" onchange="onPlayerChange()"><option value="">— Gegner auswählen —</option></select></div>
+        </div>
+        <div class="card" style="padding:1rem 1.25rem">
+          <div class="card-title" style="margin-bottom:.75rem">Modus</div>
+          <div style="display:flex;gap:.5rem">
+            <button class="mode-btn active" id="mode-btn-classic" onclick="selectMatchMode('classic')">🏓 Klassisch<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">Best of 3 · bis 11</span></button>
+            <button class="mode-btn" id="mode-btn-21er" onclick="selectMatchMode('21er')">✨ 21er<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">1 Satz · bis 21</span></button>
+            <button class="mode-btn" id="mode-btn-grand_slam" onclick="selectMatchMode('grand_slam')">🎾 Grand Slam<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">Best of 5 · bis 11</span></button>
+          </div>
         </div>
         <div class="card" id="elo-preview" style="display:none">
           <div class="card-title">Elo-Vorschau</div>
@@ -514,9 +526,11 @@
         <div class="card">
           <div class="card-title">Sätze</div>
           <div id="match-alert"></div>
-          <div class="score-row"><div class="score-label">Satz 1</div><div class="score-inputs"><input type="number" id="s1a" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="score-sep">:</span><input type="number" id="s1b" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="set-tag" id="s1-tag"></span></div></div>
-          <div class="score-row"><div class="score-label">Satz 2</div><div class="score-inputs"><input type="number" id="s2a" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="score-sep">:</span><input type="number" id="s2b" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="set-tag" id="s2-tag"></span></div></div>
+          <div class="score-row" id="set1-row"><div class="score-label">Satz 1</div><div class="score-inputs"><input type="number" id="s1a" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="score-sep">:</span><input type="number" id="s1b" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="set-tag" id="s1-tag"></span></div></div>
+          <div class="score-row" id="set2-row"><div class="score-label">Satz 2</div><div class="score-inputs"><input type="number" id="s2a" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="score-sep">:</span><input type="number" id="s2b" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="set-tag" id="s2-tag"></span></div></div>
           <div class="score-row" id="set3-row"><div class="score-label">Satz 3</div><div class="score-inputs"><input type="number" id="s3a" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="score-sep">:</span><input type="number" id="s3b" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="set-tag" id="s3-tag"></span></div></div>
+          <div class="score-row" id="set4-row"><div class="score-label">Satz 4</div><div class="score-inputs"><input type="number" id="s4a" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="score-sep">:</span><input type="number" id="s4b" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="set-tag" id="s4-tag"></span></div></div>
+          <div class="score-row" id="set5-row"><div class="score-label">Satz 5</div><div class="score-inputs"><input type="number" id="s5a" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="score-sep">:</span><input type="number" id="s5b" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="set-tag" id="s5-tag"></span></div></div>
           <div id="match-result-preview"></div>
         </div>
         <button class="btn btn-success btn-full" id="btn-submit-match" onclick="submitMatch()">Match eintragen</button>
@@ -854,12 +868,40 @@ function levelLabel(lvl) {
 }
 
 // ── SET VALIDATION ────────────────────────────────────────────────────────
+// ── MATCH MODES ───────────────────────────────────────────────────────────
+const MATCH_MODES = {
+  classic:    { label:'🏓 Klassisch', desc:'Best of 3 · Sätze bis 11 · bei 10:10 bis +2', target:11, need:2, maxSets:3 },
+  '21er':     { label:'✨ 21er',      desc:'1 Satz · bis 21 · bei 20:20 bis +2',          target:21, need:1, maxSets:1 },
+  grand_slam: { label:'🎾 Grand Slam',desc:'Best of 5 · Sätze bis 11 · bei 10:10 bis +2', target:11, need:3, maxSets:5 },
+};
+let _matchMode = 'classic';
+
+function selectMatchMode(mode) {
+  _matchMode = mode;
+  const cfg = MATCH_MODES[mode];
+  Object.keys(MATCH_MODES).forEach(m => $el(`mode-btn-${m}`)?.classList.toggle('active', m === mode));
+  $el('match-mode-desc').textContent = cfg.desc;
+  // Reset all inputs + tags
+  ['1','2','3','4','5'].forEach(n => {
+    const a=$el(`s${n}a`), b=$el(`s${n}b`), t=$el(`s${n}-tag`);
+    if(a)a.value=''; if(b)b.value='';
+    if(t){t.textContent='';t.className='set-tag';}
+  });
+  $el('match-result-preview').innerHTML=''; $el('match-alert').innerHTML='';
+  // Row visibility per mode
+  $el('set2-row').style.display = mode==='21er'   ? 'none' : '';
+  $el('set3-row').style.display = mode==='grand_slam' ? 'flex' : 'none';
+  $el('set4-row').style.display = 'none';
+  $el('set5-row').style.display = 'none';
+}
+
 function validSet(a, b) {
   a = Number(a); b = Number(b);
   if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  const target = MATCH_MODES[_matchMode]?.target ?? 11;
   const hi = Math.max(a, b), lo = Math.min(a, b);
-  if (hi < 11 || hi - lo < 2) return false;
-  if (lo < 10 && hi !== 11) return false;
+  if (hi < target || hi - lo < 2) return false;
+  if (lo < target - 1 && hi !== target) return false;
   return true;
 }
 function setWinner(a, b) { if (!validSet(a, b)) return 0; return Number(a) > Number(b) ? 1 : 2; }
@@ -1880,6 +1922,12 @@ function updateEloPreview() {
 }
 
 function onScoreInput() {
+  if (_matchMode === '21er')     { _score21(); return; }
+  if (_matchMode === 'grand_slam') { _scoreGS(); return; }
+  _scoreClassic();
+}
+
+function _scoreClassic() {
   const v={s1a:$el('s1a').value,s1b:$el('s1b').value,s2a:$el('s2a').value,s2b:$el('s2b').value,s3a:$el('s3a').value,s3b:$el('s3b').value};
   renderSetTag('s1-tag',v.s1a,v.s1b); renderSetTag('s2-tag',v.s2a,v.s2b);
   const w1=setWinner(v.s1a,v.s1b), w2=setWinner(v.s2a,v.s2b), need3=w1!==0&&w2!==0&&w1!==w2;
@@ -1887,6 +1935,62 @@ function onScoreInput() {
   if (need3) { r3.style.display='flex'; renderSetTag('s3-tag',v.s3a,v.s3b); }
   else { r3.style.display='none'; ['s3a','s3b'].forEach(id=>$el(id).value=''); $el('s3-tag').textContent=''; $el('s3-tag').className='set-tag'; }
   renderMatchPreview(v,w1,w2,need3);
+}
+
+function _score21() {
+  const a=$el('s1a').value, b=$el('s1b').value;
+  renderSetTag('s1-tag',a,b);
+  const w1=setWinner(a,b);
+  const el=$el('match-result-preview');
+  if (!w1) { el.innerHTML=''; return; }
+  const p1=byId($el('m-p1').value), p2=byId($el('m-p2').value);
+  if (!p1||!p2) { el.innerHTML=''; return; }
+  const wn=w1===1?p1.name:p2.name;
+  el.innerHTML=`<strong style="color:var(--success)">${esc(wn)}</strong> <span class="text-muted">gewinnt</span>`;
+}
+
+function _scoreGS() {
+  // Grand Slam: best of 5, need 3 sets
+  const g=n=>({a:$el(`s${n}a`).value, b:$el(`s${n}b`).value});
+  const s=[null,g(1),g(2),g(3),g(4),g(5)]; // 1-indexed
+  // Tags for always-visible sets
+  for(let n=1;n<=3;n++) renderSetTag(`s${n}-tag`,s[n].a,s[n].b);
+  // Tally wins from sets 1-3
+  let p1=0, p2=0;
+  for(let n=1;n<=3;n++){const w=setWinner(s[n].a,s[n].b);if(w===1)p1++;else if(w===2)p2++;}
+  const first3done=[1,2,3].every(n=>setWinner(s[n].a,s[n].b)!==0);
+  // Set 4
+  const r4=$el('set4-row');
+  if(first3done && p1<3 && p2<3){
+    r4.style.display='flex'; renderSetTag('s4-tag',s[4].a,s[4].b);
+    const w4=setWinner(s[4].a,s[4].b);
+    if(w4===1)p1++;else if(w4===2)p2++;
+    // Set 5
+    const r5=$el('set5-row');
+    if(w4 && p1<3 && p2<3){
+      r5.style.display='flex'; renderSetTag('s5-tag',s[5].a,s[5].b);
+      const w5=setWinner(s[5].a,s[5].b);
+      if(w5===1)p1++;else if(w5===2)p2++;
+    } else {
+      r5.style.display='none'; $el('s5a').value=''; $el('s5b').value='';
+      $el('s5-tag').textContent=''; $el('s5-tag').className='set-tag';
+    }
+  } else {
+    r4.style.display='none'; $el('s4a').value=''; $el('s4b').value='';
+    $el('s4-tag').textContent=''; $el('s4-tag').className='set-tag';
+    $el('set5-row').style.display='none'; $el('s5a').value=''; $el('s5b').value='';
+    $el('s5-tag').textContent=''; $el('s5-tag').className='set-tag';
+  }
+  // Preview
+  const p1p=byId($el('m-p1').value), p2p=byId($el('m-p2').value);
+  const el=$el('match-result-preview');
+  if(!p1p||!p2p){el.innerHTML='';return;}
+  if(p1>=3||p2>=3){
+    const wn=p1>p2?p1p.name:p2p.name;
+    el.innerHTML=`<strong style="color:var(--success)">${esc(wn)}</strong> <span class="text-muted">gewinnt</span> <strong>${p1}:${p2}</strong>`;
+  } else if(first3done){
+    el.innerHTML=`<span class="text-muted" style="font-size:.85rem">${p1}:${p2} — Satz ${p1+p2+1} eintragen</span>`;
+  } else { el.innerHTML=''; }
 }
 function renderSetTag(id,a,b) {
   const el=$el(id);
@@ -1910,19 +2014,47 @@ async function submitMatch() {
   alEl.innerHTML='';
   if (!p1id||!p2id) { alEl.innerHTML='<div class="alert alert-error">Bitte beide Spieler auswählen.</div>'; return; }
   if (p1id===p2id) { alEl.innerHTML='<div class="alert alert-error">Spieler können nicht gegen sich selbst spielen.</div>'; return; }
-  const sa=[$el('s1a').value,$el('s2a').value], sb=[$el('s1b').value,$el('s2b').value];
-  if (!validSet(sa[0],sb[0])||!validSet(sa[1],sb[1])) { alEl.innerHTML='<div class="alert alert-error">Bitte gültige Sätze 1 und 2 eintragen.</div>'; return; }
-  const w1=setWinner(sa[0],sb[0]), w2=setWinner(sa[1],sb[1]);
-  let sets=[{p1:Number(sa[0]),p2:Number(sb[0])},{p1:Number(sa[1]),p2:Number(sb[1])}];
-  let p1s=(w1===1?1:0)+(w2===1?1:0), p2s=(w1===2?1:0)+(w2===2?1:0);
-  if (w1!==w2) {
-    const s3a=$el('s3a').value, s3b=$el('s3b').value;
-    if (!validSet(s3a,s3b)) { alEl.innerHTML='<div class="alert alert-error">Steht 1:1 — bitte Satz 3 eintragen.</div>'; return; }
-    sets.push({p1:Number(s3a),p2:Number(s3b)});
-    const w3=setWinner(s3a,s3b); if(w3===1)p1s++;else p2s++;
+
+  let sets=[], p1s=0, p2s=0;
+
+  if (_matchMode==='21er') {
+    const a=$el('s1a').value, b=$el('s1b').value;
+    if (!validSet(a,b)) { alEl.innerHTML='<div class="alert alert-error">Bitte gültigen Satz bis 21 eintragen (z.B. 21:18).</div>'; return; }
+    sets=[{p1:Number(a),p2:Number(b)}];
+    setWinner(a,b)===1 ? p1s++ : p2s++;
+
+  } else if (_matchMode==='grand_slam') {
+    // Collect sets from all visible rows
+    for(let n=1;n<=5;n++){
+      const row=$el(`set${n}-row`);
+      if(!row||row.style.display==='none') continue;
+      const a=$el(`s${n}a`).value, b=$el(`s${n}b`).value;
+      if(!validSet(a,b)){
+        if(n<=3){alEl.innerHTML=`<div class="alert alert-error">Bitte gültigen Satz ${n} eintragen.</div>`;return;}
+        break; // set 4/5 not yet entered is fine if match already decided
+      }
+      sets.push({p1:Number(a),p2:Number(b)});
+      setWinner(a,b)===1 ? p1s++ : p2s++;
+    }
+    if(p1s<3&&p2s<3){alEl.innerHTML='<div class="alert alert-error">Das Match ist noch nicht entschieden (3 Sätze zum Sieg).</div>';return;}
+
+  } else {
+    // Classic: best of 3
+    const sa=[$el('s1a').value,$el('s2a').value], sb=[$el('s1b').value,$el('s2b').value];
+    if(!validSet(sa[0],sb[0])||!validSet(sa[1],sb[1])){alEl.innerHTML='<div class="alert alert-error">Bitte gültige Sätze 1 und 2 eintragen.</div>';return;}
+    const w1=setWinner(sa[0],sb[0]), w2=setWinner(sa[1],sb[1]);
+    sets=[{p1:Number(sa[0]),p2:Number(sb[0])},{p1:Number(sa[1]),p2:Number(sb[1])}];
+    p1s=(w1===1?1:0)+(w2===1?1:0); p2s=(w1===2?1:0)+(w2===2?1:0);
+    if(w1!==w2){
+      const s3a=$el('s3a').value, s3b=$el('s3b').value;
+      if(!validSet(s3a,s3b)){alEl.innerHTML='<div class="alert alert-error">Steht 1:1 — bitte Satz 3 eintragen.</div>';return;}
+      sets.push({p1:Number(s3a),p2:Number(s3b)});
+      setWinner(s3a,s3b)===1 ? p1s++ : p2s++;
+    }
   }
+
   const p1=byId(p1id), p2=byId(p2id);
-  if (!p1||!p2) { alEl.innerHTML='<div class="alert alert-error">Spieler nicht gefunden.</div>'; return; }
+  if(!p1||!p2){alEl.innerHTML='<div class="alert alert-error">Spieler nicht gefunden.</div>';return;}
   const wid=p1s>p2s?p1id:p2id, lid=p1s>p2s?p2id:p1id;
   const w=byId(wid), l=byId(lid);
   const elo=calcElo(w.elo,l.elo,w.matches,l.matches);
@@ -1936,7 +2068,8 @@ async function submitMatch() {
       p_elo_winner_after:  elo.wNew,
       p_elo_loser_before:  l.elo,
       p_elo_loser_after:   elo.lNew,
-      p_elo_delta:         elo.gain
+      p_elo_delta:         elo.gain,
+      p_match_mode:        _matchMode
     });
     if (error) throw error;
     clearMatchForm();
@@ -1949,9 +2082,13 @@ async function submitMatch() {
 }
 
 function clearMatchForm() {
-  ['s1a','s1b','s2a','s2b','s3a','s3b'].forEach(id=>$el(id).value='');
-  ['s1-tag','s2-tag','s3-tag'].forEach(id=>{$el(id).textContent='';$el(id).className='set-tag';});
-  $el('set3-row').style.display='none'; $el('match-result-preview').innerHTML='';
+  ['s1a','s1b','s2a','s2b','s3a','s3b','s4a','s4b','s5a','s5b'].forEach(id=>$el(id).value='');
+  ['s1-tag','s2-tag','s3-tag','s4-tag','s5-tag'].forEach(id=>{$el(id).textContent='';$el(id).className='set-tag';});
+  // Re-apply current mode row visibility
+  $el('set2-row').style.display = _matchMode==='21er' ? 'none' : '';
+  $el('set3-row').style.display = _matchMode==='grand_slam' ? 'flex' : 'none';
+  $el('set4-row').style.display='none'; $el('set5-row').style.display='none';
+  $el('match-result-preview').innerHTML='';
   $el('m-p2').value=''; $el('elo-preview').style.display='none';
 }
 
@@ -1972,9 +2109,10 @@ async function loadHistory() {
     const wP=byId(m.winner_id), lP=byId(m.loser_id);
     const sets=(m.sets||[]).map(s=>`<span class="set-chip">${s.p1??'?'}:${s.p2??'?'}</span>`).join('');
     const lLoss=m.elo_loser_before!=null&&m.elo_loser_after!=null?Math.abs(m.elo_loser_before-m.elo_loser_after):m.elo_delta||0;
+    const modeBadge=m.match_mode&&m.match_mode!=='classic'?`<span class="mode-badge">${MATCH_MODES[m.match_mode]?.label||m.match_mode}</span>`:'';
     return `<div class="match-card">
       <div><div class="match-player winner">${wP?esc(wP.name):'?'}</div><div class="match-elo pos">+${m.elo_delta||0} Elo</div></div>
-      <div class="match-center"><div class="match-sets">${sets}</div><div class="match-date">${fmtDate(m.played_at)}</div>
+      <div class="match-center"><div class="match-sets">${sets}${modeBadge}</div><div class="match-date">${fmtDate(m.played_at)}</div>
         <button onclick="openReportModal('${m.id}')" style="margin-top:.25rem;background:none;border:none;color:var(--text-dim);font-size:.7rem;cursor:pointer;padding:.1rem .3rem;border-radius:3px" title="Falsches Ergebnis melden" onmouseover="this.style.color='var(--error)'" onmouseout="this.style.color='var(--text-dim)'">🚩 Melden</button>
       </div>
       <div class="match-right"><div class="match-player loser">${lP?esc(lP.name):'?'}</div><div class="match-elo neg">−${lLoss} Elo</div></div>
@@ -2816,9 +2954,10 @@ async function renderProfileView() {
       const sets = (m.sets||[]).map(s=>`<span class="set-chip">${s.p1??'?'}:${s.p2??'?'}</span>`).join('');
       const delta = isW ? `+${m.elo_delta}` : '-'+Math.abs((m.elo_loser_before||0)-(m.elo_loser_after||0));
       const dt = fmtDateShort(m.played_at);
+      const mb = m.match_mode&&m.match_mode!=='classic'?` <span class="mode-badge">${MATCH_MODES[m.match_mode]?.label||m.match_mode}</span>`:'';
       return `<div style="display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--border)">
         <span style="font-size:.85rem;font-weight:700;color:${isW?'var(--success)':'var(--error)'}">${isW?'✓':'✗'}</span>
-        <span style="flex:1;font-size:.88rem;font-weight:600">${opp?esc(opp.name):'?'}</span>
+        <span style="flex:1;font-size:.88rem;font-weight:600">${opp?esc(opp.name):'?'}${mb}</span>
         <div class="match-sets">${sets}</div>
         <span style="font-size:.78rem;font-weight:700;color:${isW?'var(--success)':'var(--error)'};min-width:36px;text-align:right">${delta}</span>
         <span style="font-size:.72rem;color:var(--text-dim);min-width:52px;text-align:right">${dt}</span>
