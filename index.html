@@ -1701,11 +1701,21 @@ async function openProfile(playerId) {
     }
   } catch {}
 
-  // Load async data (chart updates silently, no loading text)
-  const [histData, matchData] = await Promise.all([
+  // Load async data (chart + recent matches incl. tournament games)
+  const [histData, matchData, tmMatchData] = await Promise.all([
     loadPlayerEloHistory(playerId),
     withTimeout(
       db.from('matches').select('*').or(`winner_id.eq.${playerId},loser_id.eq.${playerId}`).order('played_at',{ascending:false}).limit(10),
+      10000, {data:null}
+    ),
+    withTimeout(
+      db.from('tournament_matches')
+        .select('id,player1_id,player2_id,winner_id,score1,score2,elo_delta,elo_loss,completed_at')
+        .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
+        .not('winner_id','is',null)
+        .not('completed_at','is',null)
+        .order('completed_at',{ascending:false})
+        .limit(10),
       10000, {data:null}
     )
   ]);
@@ -1716,19 +1726,29 @@ async function openProfile(playerId) {
   if (pcEl) pcEl.innerHTML = renderEloChart(histData, _eloFilterOverlay);
   try { localStorage.setItem(`pl_hist_${playerId}`, JSON.stringify(histData)); } catch {}
 
-  // Render recent matches
-  const matches=matchData.data||[];
-  if (!matches.length) {
+  // Merge regular + tournament matches, newest first
+  const regM = (matchData?.data||[]).map(m=>({...m, _isTm:false}));
+  const tmM  = (tmMatchData?.data||[]).map(m=>({
+    _isTm:true, winner_id:m.winner_id,
+    loser_id: m.winner_id===m.player1_id ? m.player2_id : m.player1_id,
+    sets: m.score1!=null?[{p1:m.score1,p2:m.score2}]:[],
+    elo_delta:m.elo_delta||0, elo_loss:m.elo_loss??m.elo_delta??0, played_at:m.completed_at,
+  }));
+  const allM = [...regM,...tmM].sort((a,b)=>new Date(b.played_at)-new Date(a.played_at)).slice(0,10);
+
+  if (!allM.length) {
     $el('profile-matches').innerHTML='<div class="text-muted" style="font-size:.85rem">Noch keine Matches.</div>';
   } else {
-    $el('profile-matches').innerHTML=matches.map(m=>{
+    $el('profile-matches').innerHTML=allM.map(m=>{
       const isW=m.winner_id===playerId;
       const opp=byId(isW?m.loser_id:m.winner_id);
       const sets=(m.sets||[]).map(s=>`<span class="set-chip">${s.p1??'?'}:${s.p2??'?'}</span>`).join('');
-      const delta=isW?`+${m.elo_delta}`:'-'+Math.abs((m.elo_loser_before||0)-(m.elo_loser_after||0));
+      const delta=isW?`+${m.elo_delta||0}`:'-'+(m._isTm?(m.elo_loss||0):Math.abs((m.elo_loser_before||0)-(m.elo_loser_after||0)));
+      const mb=m._isTm?` <span class="mode-badge">🏆 Turnier</span>`:
+        (m.match_mode&&m.match_mode!=='classic'?` <span class="mode-badge">${MATCH_MODES[m.match_mode]?.label||m.match_mode}</span>`:'');
       return `<div style="display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--border)">
         <span style="font-size:.85rem;font-weight:700;color:${isW?'var(--success)':'var(--error)'}">${isW?'S':'N'}</span>
-        <span style="flex:1;font-size:.88rem">${opp?esc(opp.name):'?'}</span>
+        <span style="flex:1;font-size:.88rem">${opp?esc(opp.name):'?'}${mb}</span>
         <div class="match-sets">${sets}</div>
         <span style="font-size:.78rem;font-weight:700;color:${isW?'var(--success)':'var(--error)'}">${delta}</span>
       </div>`;
@@ -2216,21 +2236,61 @@ function buildHistoryFilter() {
 async function loadHistory() {
   const el=$el('history-list'); el.innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade…</p></div>';
   const filt=$el('history-filter').value;
-  let q=db.from('matches').select('*').order('played_at',{ascending:false}).limit(60);
-  if(filt) q=q.or(`winner_id.eq.${filt},loser_id.eq.${filt}`);
-  const {data,error}=await withTimeout(q, 10000, {data:null,error:{message:'Zeitüberschreitung — bitte erneut versuchen.'}});
-  if(error){el.innerHTML=`<div class="alert alert-error">Fehler: ${error.message}</div>`;return;}
-  if(!data?.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">🏓</div><p>Noch keine Matches.</p></div>';return;}
-  el.innerHTML=data.map(m=>{
+
+  // Fetch regular matches + tournament matches in parallel
+  let qReg = db.from('matches').select('*').order('played_at',{ascending:false}).limit(60);
+  if (filt) qReg = qReg.or(`winner_id.eq.${filt},loser_id.eq.${filt}`);
+  let qTm = db.from('tournament_matches')
+    .select('id,tournament_id,player1_id,player2_id,winner_id,score1,score2,elo_delta,elo_loss,elo_winner_before,elo_loser_before,completed_at')
+    .not('winner_id','is',null)
+    .not('completed_at','is',null)
+    .order('completed_at',{ascending:false})
+    .limit(60);
+  if (filt) qTm = qTm.or(`player1_id.eq.${filt},player2_id.eq.${filt}`);
+
+  const [regRes, tmRes] = await Promise.all([
+    withTimeout(qReg, 10000, {data:null, error:{message:'Zeitüberschreitung'}}),
+    withTimeout(qTm,  10000, {data:null, error:null})
+  ]);
+
+  if (regRes.error) { el.innerHTML=`<div class="alert alert-error">Fehler: ${regRes.error.message}</div>`; return; }
+
+  // Normalise tournament matches to the same shape
+  const tmNorm = (tmRes?.data || []).map(m => {
+    const loser_id = m.winner_id === m.player1_id ? m.player2_id : m.player1_id;
+    const lLoss = m.elo_loss ?? m.elo_delta ?? 0;
+    return {
+      _isTm: true,
+      id: m.id,
+      winner_id: m.winner_id,
+      loser_id,
+      sets: m.score1!=null ? [{p1:m.score1, p2:m.score2}] : [],
+      elo_delta: m.elo_delta || 0,
+      elo_loss: lLoss,
+      played_at: m.completed_at,
+    };
+  });
+
+  // Merge + sort newest first, cap at 60
+  const all = [...(regRes.data||[]), ...tmNorm]
+    .sort((a,b) => new Date(b.played_at) - new Date(a.played_at))
+    .slice(0, 60);
+
+  if (!all.length) { el.innerHTML='<div class="empty-state"><div class="empty-icon">🏓</div><p>Noch keine Matches.</p></div>'; return; }
+
+  el.innerHTML = all.map(m => {
     const wP=byId(m.winner_id), lP=byId(m.loser_id);
     const sets=(m.sets||[]).map(s=>`<span class="set-chip">${s.p1??'?'}:${s.p2??'?'}</span>`).join('');
-    const lLoss=m.elo_loser_before!=null&&m.elo_loser_after!=null?Math.abs(m.elo_loser_before-m.elo_loser_after):m.elo_delta||0;
-    const modeBadge=m.match_mode&&m.match_mode!=='classic'?`<span class="mode-badge">${MATCH_MODES[m.match_mode]?.label||m.match_mode}</span>`:'';
+    const lLoss = m._isTm ? (m.elo_loss||0) : (m.elo_loser_before!=null&&m.elo_loser_after!=null ? Math.abs(m.elo_loser_before-m.elo_loser_after) : m.elo_delta||0);
+    const modeBadge = m._isTm
+      ? `<span class="mode-badge">🏆 Turnier</span>`
+      : (m.match_mode&&m.match_mode!=='classic' ? `<span class="mode-badge">${MATCH_MODES[m.match_mode]?.label||m.match_mode}</span>` : '');
+    const reportBtn = !m._isTm
+      ? `<button onclick="openReportModal('${m.id}')" style="margin-top:.25rem;background:none;border:none;color:var(--text-dim);font-size:.7rem;cursor:pointer;padding:.1rem .3rem;border-radius:3px" title="Falsches Ergebnis melden" onmouseover="this.style.color='var(--error)'" onmouseout="this.style.color='var(--text-dim)'">🚩 Melden</button>`
+      : '';
     return `<div class="match-card">
       <div><div class="match-player winner">${wP?esc(wP.name):'?'}</div><div class="match-elo pos">+${m.elo_delta||0} Elo</div></div>
-      <div class="match-center"><div class="match-sets">${sets}${modeBadge}</div><div class="match-date">${fmtDate(m.played_at)}</div>
-        <button onclick="openReportModal('${m.id}')" style="margin-top:.25rem;background:none;border:none;color:var(--text-dim);font-size:.7rem;cursor:pointer;padding:.1rem .3rem;border-radius:3px" title="Falsches Ergebnis melden" onmouseover="this.style.color='var(--error)'" onmouseout="this.style.color='var(--text-dim)'">🚩 Melden</button>
-      </div>
+      <div class="match-center"><div class="match-sets">${sets}${modeBadge}</div><div class="match-date">${fmtDate(m.played_at)}</div>${reportBtn}</div>
       <div class="match-right"><div class="match-player loser">${lP?esc(lP.name):'?'}</div><div class="match-elo neg">−${lLoss} Elo</div></div>
     </div>`;
   }).join('');
@@ -3051,34 +3111,60 @@ async function renderProfileView() {
   buildH2HSelects();
   renderStatsView();
 
-  // Fetch fresh data (chart will silently update, no "Lade…" shown)
-  const [histData, matchRes] = await Promise.all([
+  // Fetch fresh data (chart + recent matches, including tournament games)
+  const [histData, matchRes, tmMatchRes] = await Promise.all([
     loadPlayerEloHistory(p.id),
     withTimeout(
       db.from('matches').select('*').or(`winner_id.eq.${p.id},loser_id.eq.${p.id}`).order('played_at',{ascending:false}).limit(10),
+      10000, {data:null}
+    ),
+    withTimeout(
+      db.from('tournament_matches')
+        .select('id,player1_id,player2_id,winner_id,score1,score2,elo_delta,elo_loss,completed_at')
+        .or(`player1_id.eq.${p.id},player2_id.eq.${p.id}`)
+        .not('winner_id','is',null)
+        .not('completed_at','is',null)
+        .order('completed_at',{ascending:false})
+        .limit(10),
       10000, {data:null}
     )
   ]);
 
   // Silently update chart + form indicator with fresh data
   _applyHistData(histData);
-  // Persist fresh data to cache
   try { localStorage.setItem(_histCacheKey, JSON.stringify(histData)); } catch {}
 
-  // Last matches list
+  // Merge + sort last 10 matches (regular + tournament)
   const matchEl = $el('pv-matches');
   if (!matchEl) return;
-  const matches = matchRes?.data || [];
-  if (!matches.length) {
+  const regMatches = (matchRes?.data || []).map(m => ({...m, _isTm:false}));
+  const tmMatches  = (tmMatchRes?.data || []).map(m => ({
+    _isTm: true,
+    winner_id: m.winner_id,
+    loser_id:  m.winner_id === m.player1_id ? m.player2_id : m.player1_id,
+    sets: m.score1!=null ? [{p1:m.score1, p2:m.score2}] : [],
+    elo_delta: m.elo_delta || 0,
+    elo_loss:  m.elo_loss ?? m.elo_delta ?? 0,
+    played_at: m.completed_at,
+  }));
+  const allMatches = [...regMatches, ...tmMatches]
+    .sort((a,b) => new Date(b.played_at) - new Date(a.played_at))
+    .slice(0, 10);
+
+  if (!allMatches.length) {
     matchEl.innerHTML = '<div class="text-muted" style="font-size:.85rem">Noch keine Matches.</div>';
   } else {
-    matchEl.innerHTML = matches.map(m => {
+    matchEl.innerHTML = allMatches.map(m => {
       const isW = m.winner_id === p.id;
       const opp = byId(isW ? m.loser_id : m.winner_id);
       const sets = (m.sets||[]).map(s=>`<span class="set-chip">${s.p1??'?'}:${s.p2??'?'}</span>`).join('');
-      const delta = isW ? `+${m.elo_delta}` : '-'+Math.abs((m.elo_loser_before||0)-(m.elo_loser_after||0));
+      const delta = isW
+        ? `+${m.elo_delta||0}`
+        : '-' + (m._isTm ? (m.elo_loss||0) : Math.abs((m.elo_loser_before||0)-(m.elo_loser_after||0)));
       const dt = fmtDateShort(m.played_at);
-      const mb = m.match_mode&&m.match_mode!=='classic'?` <span class="mode-badge">${MATCH_MODES[m.match_mode]?.label||m.match_mode}</span>`:'';
+      const mb = m._isTm
+        ? ` <span class="mode-badge">🏆 Turnier</span>`
+        : (m.match_mode&&m.match_mode!=='classic'?` <span class="mode-badge">${MATCH_MODES[m.match_mode]?.label||m.match_mode}</span>`:'');
       return `<div style="display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--border)">
         <span style="font-size:.85rem;font-weight:700;color:${isW?'var(--success)':'var(--error)'}">${isW?'✓':'✗'}</span>
         <span style="flex:1;font-size:.88rem;font-weight:600">${opp?esc(opp.name):'?'}${mb}</span>
