@@ -3008,7 +3008,6 @@ async function renderProfileView() {
             ${rank>0?`<div style="font-size:.82rem"><span style="color:var(--text-muted)">Platz in der Liga</span> <span style="font-weight:700">${rank}</span></div>`:''}
             <div style="font-size:.82rem"><span style="color:var(--text-muted)">Matches</span> <span style="font-weight:700">${p.matches}</span></div>
             <div style="font-size:.82rem"><span style="color:var(--text-muted)">Elo</span> <span style="font-weight:700">${p.elo}</span></div>
-            <div id="pv-form-indicator" style="min-height:1.2rem"></div>
             <div style="margin-top:.35rem;display:flex;gap:.4rem;flex-wrap:wrap">
               <button class="btn btn-primary btn-sm" onclick="showView('match')" style="font-size:.78rem;padding:.3rem .8rem">➕ Match eintragen</button>
               <button class="btn btn-secondary btn-sm" onclick="openEditProfile('${p.id}')" style="font-size:.78rem;padding:.3rem .8rem">✏️ Bearbeiten</button>
@@ -3087,16 +3086,6 @@ async function renderProfileView() {
     _eloHistMain = pts;
     const chartEl = $el('pv-chart');
     if (chartEl) chartEl.innerHTML = renderEloChart(pts, _eloFilterMain);
-    const trend = computeFormTrend(pts);
-    const formEl = $el('pv-form-indicator');
-    if (formEl && trend) {
-      const isUp = trend.eloDelta > 5, isDown = trend.eloDelta < -5;
-      const arrow = isUp ? '↑' : isDown ? '↓' : '→';
-      const trendCol = isUp ? 'var(--success)' : isDown ? 'var(--error)' : 'var(--text-muted)';
-      const eloPart = trend.eloDelta !== 0 ? ` (${trend.eloDelta>0?'+':''}${trend.eloDelta})` : '';
-      const streakPart = trend.streak >= 2 ? ` · ${trend.streak}× ${trend.streakWin?'🟢':'🔴'} in Folge` : '';
-      formEl.innerHTML = `<span style="font-size:.8rem;font-weight:700;color:${trendCol}">${arrow} ${trend.wins}S ${trend.losses}N letzte ${trend.n}${eloPart}${streakPart}</span>`;
-    }
   }
   // Paint from cache immediately (no loading flash)
   try {
