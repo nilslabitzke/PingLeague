@@ -870,7 +870,10 @@ function withTimeout(promise, ms, fallback) {
 }
 // ── PLAYER CACHE (localStorage) ───────────────────────────────────────────
 const PL_CACHE        = 'pl_v1';
-const PL_LEAGUES_CACHE = 'pl_leagues_v1';
+const PL_LEAGUES_CACHE     = 'pl_leagues_v1';
+const PL_CHALLENGES_CACHE  = 'pl_challenges_v1';
+const PL_TOURNAMENTS_CACHE = 'pl_tournaments_v1';
+const PL_SETTINGS_CACHE    = 'pl_settings_v1';
 const AUTO_REFRESH_MS = 2 * 60 * 1000; // 2 minutes — always fresh on reload + tab-switch
 function getCachedPlayers() {
   try { const c=JSON.parse(localStorage.getItem(PL_CACHE)||'null'); return c?.data||null; } catch(e){return null;}
@@ -886,6 +889,24 @@ function getCachedLeagues() {
 }
 function setCachedLeagues(leagues, memberships) {
   try { localStorage.setItem(PL_LEAGUES_CACHE, JSON.stringify({leagues, memberships})); } catch(e){}
+}
+function getCachedChallenges(playerId) {
+  try { const c=JSON.parse(localStorage.getItem(PL_CHALLENGES_CACHE)||'null'); return c?.pid===playerId ? c.data : null; } catch(e){return null;}
+}
+function setCachedChallenges(playerId, data) {
+  try { localStorage.setItem(PL_CHALLENGES_CACHE, JSON.stringify({pid:playerId, data})); } catch(e){}
+}
+function getCachedTournaments() {
+  try { const c=JSON.parse(localStorage.getItem(PL_TOURNAMENTS_CACHE)||'null'); return c?.data||null; } catch(e){return null;}
+}
+function setCachedTournaments(data) {
+  try { localStorage.setItem(PL_TOURNAMENTS_CACHE, JSON.stringify({data})); } catch(e){}
+}
+function getCachedSettings() {
+  try { return JSON.parse(localStorage.getItem(PL_SETTINGS_CACHE)||'null'); } catch(e){return null;}
+}
+function setCachedSettings(data) {
+  try { localStorage.setItem(PL_SETTINGS_CACHE, JSON.stringify(data)); } catch(e){}
 }
 function updateLastUpdated() {
   const el=$el('ranking-last-updated'); if(!el) return;
@@ -1308,6 +1329,8 @@ async function doLogout() {
   S.user=null; S.player=null; S.isAdmin=false;
   try { localStorage.removeItem(MY_PLAYER_KEY); } catch(e) {}
   try { localStorage.removeItem(PL_LEAGUES_CACHE); } catch(e) {}
+  try { localStorage.removeItem(PL_CHALLENGES_CACHE); } catch(e) {}
+  // Tournaments + Settings are not user-specific — keep them cached across sessions
   teardownRealtime();
   showPage('auth');
   try { await db.auth.signOut(); } catch(e) { console.error('signOut:', e); }
@@ -1359,12 +1382,21 @@ async function setupUser(user) {
     showView('profile'); // default landing tab
   }
 
-  // ── Load settings in background ───────────────────────────────────────
+  // ── Load settings: cache-first, then fresh in background ─────────────
+  const cachedSettings = getCachedSettings();
+  if (cachedSettings) {
+    S.settings = {k_high: cachedSettings.k_high||32, k_low: cachedSettings.k_low||16};
+    $el('k-high').value = S.settings.k_high; $el('k-low').value = S.settings.k_low;
+  }
   withTimeout(db.from('settings').select('*').limit(1).maybeSingle(), 5000, {data:null})
     .then(r => {
       if (_setupSession !== mySession) return;
       const sd = r?.data;
-      if (sd) { S.settings={k_high:sd.k_high||32,k_low:sd.k_low||16}; $el('k-high').value=S.settings.k_high; $el('k-low').value=S.settings.k_low; }
+      if (sd) {
+        S.settings = {k_high:sd.k_high||32, k_low:sd.k_low||16};
+        $el('k-high').value = S.settings.k_high; $el('k-low').value = S.settings.k_low;
+        setCachedSettings(S.settings);
+      }
     }).catch(console.error);
 
   // ── STEP 2: Fresh data from DB ────────────────────────────────────────
@@ -1999,6 +2031,10 @@ function fmtAgo(iso) {
 
 async function loadChallenges() {
   if (!S.player) return;
+  // 1) Serve from cache immediately so badge + view appear at once
+  const cached = getCachedChallenges(S.player.id);
+  if (cached) { S.challenges = cached; updateChallengeBadge(); }
+  // 2) Fetch fresh in background
   const { data } = await withTimeout(
     db.from('challenges').select('*')
       .or(`challenger_id.eq.${S.player.id},challenged_id.eq.${S.player.id}`)
@@ -2006,7 +2042,8 @@ async function loadChallenges() {
       .order('created_at', { ascending: false }),
     8000, { data: null }
   );
-  S.challenges = data || [];
+  S.challenges = data ?? S.challenges;
+  setCachedChallenges(S.player.id, S.challenges);
   updateChallengeBadge();
 }
 
@@ -2248,11 +2285,16 @@ function showChallengesSubTab(tab) {
 }
 
 async function loadTournaments() {
+  // 1) Serve from cache immediately
+  const cached = getCachedTournaments();
+  if (cached) { S.tournaments = cached; }
+  // 2) Fetch fresh in background
   const { data } = await withTimeout(
     db.from('tournaments').select('*').order('created_at', { ascending: false }),
     8000, { data: null }
   );
-  S.tournaments = data || [];
+  S.tournaments = data ?? S.tournaments;
+  setCachedTournaments(S.tournaments);
 }
 
 function renderTournamentsSection() {
@@ -2593,6 +2635,9 @@ function showView(id) {
   else if(id==='ranking'){loadPlayers().then(renderRanking);}
   else if(id==='admin'){renderAdminPlayers(); loadAdminReports();}
   else if(id==='challenges'){
+    // Render from cache immediately, refresh in background
+    renderChallengesView();
+    renderTournamentsSection();
     Promise.all([loadChallenges(), loadTournaments()]).then(()=>{
       renderChallengesView();
       renderTournamentsSection();
@@ -3008,8 +3053,17 @@ function init() {
           S.leagues     = cachedLeagues.leagues;
           S.memberships = cachedLeagues.memberships || [];
         }
+        // Challenges badge + tournaments list from cache
+        const cachedCh = getCachedChallenges(myId);
+        if (cachedCh) { S.challenges = cachedCh; }
+        const cachedTr = getCachedTournaments();
+        if (cachedTr)  { S.tournaments = cachedTr; }
+        // Settings from cache
+        const cachedSet = getCachedSettings();
+        if (cachedSet) { S.settings = {k_high:cachedSet.k_high||32,k_low:cachedSet.k_low||16}; }
         renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
         renderLeagueTabs();
+        updateChallengeBadge();
         showPage('app');   // dismiss loading spinner instantly
         showView('profile');
       }
