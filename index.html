@@ -509,6 +509,7 @@
             <button class="mode-btn active" id="mode-btn-classic" onclick="selectMatchMode('classic')">🏓 Klassisch<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">Best of 3 · bis 11</span></button>
             <button class="mode-btn" id="mode-btn-21er" onclick="selectMatchMode('21er')">✨ 21er<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">1 Satz · bis 21</span></button>
             <button class="mode-btn" id="mode-btn-grand_slam" onclick="selectMatchMode('grand_slam')">🎾 Grand Slam<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">Best of 5 · bis 11</span></button>
+            <button class="mode-btn" id="mode-btn-risky_seven" onclick="selectMatchMode('risky_seven')">🃏 Risky Seven<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">1 Satz · bis 7 · ×0.5 Elo</span></button>
           </div>
         </div>
         <div class="card" id="elo-preview" style="display:none">
@@ -870,10 +871,19 @@ function levelLabel(lvl) {
 // ── SET VALIDATION ────────────────────────────────────────────────────────
 // ── MATCH MODES ───────────────────────────────────────────────────────────
 const MATCH_MODES = {
-  classic:    { label:'🏓 Klassisch', desc:'Best of 3 · Sätze bis 11 · bei 10:10 bis +2', target:11, need:2, maxSets:3 },
-  '21er':     { label:'✨ 21er',      desc:'1 Satz · bis 21 · bei 20:20 bis +2',          target:21, need:1, maxSets:1 },
-  grand_slam: { label:'🎾 Grand Slam',desc:'Best of 5 · Sätze bis 11 · bei 10:10 bis +2', target:11, need:3, maxSets:5 },
+  classic:     { label:'🏓 Klassisch',   desc:'Best of 3 · Sätze bis 11 · bei 10:10 bis +2',  target:11, need:2, maxSets:3, eloFactor:1   },
+  '21er':      { label:'✨ 21er',         desc:'1 Satz · bis 21 · bei 20:20 bis +2',            target:21, need:1, maxSets:1, eloFactor:1   },
+  grand_slam:  { label:'🎾 Grand Slam',   desc:'Best of 5 · Sätze bis 11 · bei 10:10 bis +2',  target:11, need:3, maxSets:5, eloFactor:1   },
+  risky_seven: { label:'🃏 Risky Seven',  desc:'1 Satz · bis 7 · bei 6:6 bis +2 · ×0.5 Elo',  target:7,  need:1, maxSets:1, eloFactor:0.5 },
 };
+
+// Apply an Elo-factor (e.g. 0.5 for Risky Seven) to a calcElo result
+function applyEloFactor(elo, wElo, lElo, factor) {
+  if (!factor || factor === 1) return elo;
+  const gain = Math.max(1, Math.round(elo.gain * factor));
+  const loss = Math.max(1, Math.round(elo.loss * factor));
+  return { gain, loss, wNew: Math.max(ELO_MIN, wElo + gain), lNew: Math.max(ELO_MIN, lElo - loss) };
+}
 let _matchMode = 'classic';
 
 function selectMatchMode(mode) {
@@ -889,7 +899,8 @@ function selectMatchMode(mode) {
   });
   $el('match-result-preview').innerHTML=''; $el('match-alert').innerHTML='';
   // Row visibility per mode
-  $el('set2-row').style.display = mode==='21er'   ? 'none' : '';
+  const singleSet = mode==='21er'||mode==='risky_seven';
+  $el('set2-row').style.display = singleSet ? 'none' : '';
   $el('set3-row').style.display = mode==='grand_slam' ? 'flex' : 'none';
   $el('set4-row').style.display = 'none';
   $el('set5-row').style.display = 'none';
@@ -1915,14 +1926,18 @@ function updateEloPreview() {
   const eW=expected(p1.elo,p2.elo), pct=Math.round(eW*100);
   $el('win-bar-fill').style.width=`${pct}%`;
   $el('win-pct-txt').textContent=`${pct}% Siegchance für ${p1.name}`;
-  const ifW=calcElo(p1.elo,p2.elo,p1.matches,p2.matches);
-  const ifL=calcElo(p2.elo,p1.elo,p2.matches,p1.matches);
-  $el('ep-win-val').textContent=`+${ifW.gain}`; $el('ep-win-tot').textContent=`→ ${ifW.wNew}`;
-  $el('ep-loss-val').textContent=`−${ifL.loss}`; $el('ep-loss-tot').textContent=`→ ${ifL.lNew}`;
+  const factor = MATCH_MODES[_matchMode]?.eloFactor ?? 1;
+  const ifWRaw=calcElo(p1.elo,p2.elo,p1.matches,p2.matches);
+  const ifLRaw=calcElo(p2.elo,p1.elo,p2.matches,p1.matches);
+  const ifW=applyEloFactor(ifWRaw,p1.elo,p2.elo,factor);
+  const ifL=applyEloFactor(ifLRaw,p2.elo,p1.elo,factor);
+  const factorHint = factor!==1 ? ` <span style="font-size:.72rem;color:var(--warn)">×${factor}</span>` : '';
+  $el('ep-win-val').innerHTML=`+${ifW.gain}${factorHint}`; $el('ep-win-tot').textContent=`→ ${ifW.wNew}`;
+  $el('ep-loss-val').innerHTML=`−${ifL.loss}${factorHint}`; $el('ep-loss-tot').textContent=`→ ${ifL.lNew}`;
 }
 
 function onScoreInput() {
-  if (_matchMode === '21er')     { _score21(); return; }
+  if (_matchMode === '21er' || _matchMode === 'risky_seven') { _score21(); return; }
   if (_matchMode === 'grand_slam') { _scoreGS(); return; }
   _scoreClassic();
 }
@@ -2017,9 +2032,10 @@ async function submitMatch() {
 
   let sets=[], p1s=0, p2s=0;
 
-  if (_matchMode==='21er') {
+  if (_matchMode==='21er'||_matchMode==='risky_seven') {
+    const target=MATCH_MODES[_matchMode].target;
     const a=$el('s1a').value, b=$el('s1b').value;
-    if (!validSet(a,b)) { alEl.innerHTML='<div class="alert alert-error">Bitte gültigen Satz bis 21 eintragen (z.B. 21:18).</div>'; return; }
+    if (!validSet(a,b)) { alEl.innerHTML=`<div class="alert alert-error">Bitte gültigen Satz bis ${target} eintragen.</div>`; return; }
     sets=[{p1:Number(a),p2:Number(b)}];
     setWinner(a,b)===1 ? p1s++ : p2s++;
 
@@ -2057,7 +2073,9 @@ async function submitMatch() {
   if(!p1||!p2){alEl.innerHTML='<div class="alert alert-error">Spieler nicht gefunden.</div>';return;}
   const wid=p1s>p2s?p1id:p2id, lid=p1s>p2s?p2id:p1id;
   const w=byId(wid), l=byId(lid);
-  const elo=calcElo(w.elo,l.elo,w.matches,l.matches);
+  const eloRaw=calcElo(w.elo,l.elo,w.matches,l.matches);
+  const factor=MATCH_MODES[_matchMode]?.eloFactor??1;
+  const elo=applyEloFactor(eloRaw,w.elo,l.elo,factor);
   const btn=$el('btn-submit-match'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Speichern…';
   try {
     const {error} = await db.rpc('submit_match', {
@@ -2085,7 +2103,7 @@ function clearMatchForm() {
   ['s1a','s1b','s2a','s2b','s3a','s3b','s4a','s4b','s5a','s5b'].forEach(id=>$el(id).value='');
   ['s1-tag','s2-tag','s3-tag','s4-tag','s5-tag'].forEach(id=>{$el(id).textContent='';$el(id).className='set-tag';});
   // Re-apply current mode row visibility
-  $el('set2-row').style.display = _matchMode==='21er' ? 'none' : '';
+  $el('set2-row').style.display = (_matchMode==='21er'||_matchMode==='risky_seven') ? 'none' : '';
   $el('set3-row').style.display = _matchMode==='grand_slam' ? 'flex' : 'none';
   $el('set4-row').style.display='none'; $el('set5-row').style.display='none';
   $el('match-result-preview').innerHTML='';
