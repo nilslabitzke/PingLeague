@@ -1425,6 +1425,13 @@ async function setupUser(user) {
   $el('header-user-club').textContent = '';
   $el('admin-nav').style.display = 'none';
   $el('bottom-admin-btn').style.display = 'none';
+
+  // If the app is already visible (instant startup ran before onAuthStateChange
+  // fired), don't force-navigate back to Profile — the user may have already
+  // moved to a different tab.
+  const alreadyInApp = $el('app-page').style.display !== 'none'
+                    && !!document.querySelector('#app-page .view.active');
+
   showPage('app');
 
   // ── STEP 1: Show cached data instantly ────────────────────────────────
@@ -1434,7 +1441,7 @@ async function setupUser(user) {
     const cpd = cached.find(p => p.user_id === user.id) || null;
     applyPlayerData(cpd, user);
     renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
-    showView('profile'); // default landing tab
+    if (!alreadyInApp) showView('profile'); // only navigate on fresh start
   }
 
   // ── Load settings: cache-first, then fresh in background ─────────────
@@ -1471,8 +1478,10 @@ async function setupUser(user) {
   if (S.isAdmin) loadAdminReports(); // load report badge for admin
   loadLeagues();         // load leagues + memberships
   setupRealtime();       // live updates via WebSocket
-  // Show profile tab first so the user lands on their own profile
-  showView('profile');
+  // Only navigate to Profile on a fresh start — if the user already navigated
+  // away (possible when onAuthStateChange fires late after instant startup),
+  // leave them where they are.
+  if (!alreadyInApp) showView('profile');
 }
 
 // ── DATA ──────────────────────────────────────────────────────────────────
