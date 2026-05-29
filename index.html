@@ -1764,60 +1764,90 @@ function closeProfile(e) {
 }
 
 async function loadPlayerEloHistory(playerId) {
-  // Fetch regular matches + tournament matches in parallel
+  // Current Elo is needed for backward reconstruction of old matches
+  const currentElo = (byId(playerId) || S.player)?.elo ?? 1000;
+
+  // Fetch regular matches + ALL tournament matches (including those without before-Elo snapshots)
   const [regRes, tmRes] = await Promise.all([
     withTimeout(
       db.from('matches')
-        .select('winner_id,elo_winner_before,elo_winner_after,elo_loser_before,elo_loser_after,played_at')
+        .select('winner_id,elo_winner_before,elo_winner_after,elo_loser_before,elo_loser_after,elo_delta,played_at')
         .or(`winner_id.eq.${playerId},loser_id.eq.${playerId}`)
         .order('played_at',{ascending:true}),
       10000, {data:null}
     ),
     withTimeout(
       db.from('tournament_matches')
-        .select('winner_id,elo_winner_before,elo_loser_before,elo_delta,elo_loss,completed_at')
+        .select('winner_id,player1_id,player2_id,elo_winner_before,elo_loser_before,elo_delta,elo_loss,completed_at')
         .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
         .not('winner_id','is',null)
-        .not('elo_winner_before','is',null)
+        .not('completed_at','is',null)
         .order('completed_at',{ascending:true}),
       10000, {data:null}
     )
   ]);
 
-  // Normalise tournament matches to the same shape as regular matches
-  const tmNorm = (tmRes?.data || []).map(m => {
-    const isWin = m.winner_id === playerId;
-    return {
-      winner_id:        m.winner_id,
-      elo_winner_before: m.elo_winner_before,
-      elo_winner_after:  m.elo_winner_before + (m.elo_delta || 0),
-      elo_loser_before:  m.elo_loser_before,
-      elo_loser_after:   m.elo_loser_before  - (m.elo_loss  || 0),
-      played_at:         m.completed_at
-    };
-  });
+  // Merge into a unified list, sorted chronologically
+  const regList = (regRes?.data || []).map(m => ({
+    _type: 'match',
+    winner_id: m.winner_id,
+    elo_winner_before: m.elo_winner_before,
+    elo_winner_after:  m.elo_winner_after,
+    elo_loser_before:  m.elo_loser_before,
+    elo_loser_after:   m.elo_loser_after,
+    delta: m.elo_delta,
+    played_at: m.played_at
+  }));
+  const tmList = (tmRes?.data || []).map(m => ({
+    _type: 'tournament',
+    winner_id: m.winner_id,
+    elo_winner_before: m.elo_winner_before, // may be null for older matches
+    elo_loser_before:  m.elo_loser_before,  // may be null for older matches
+    delta: m.elo_delta,
+    loss:  m.elo_loss,
+    played_at: m.completed_at
+  }));
 
-  // Merge and sort by date
-  const all = [...(regRes?.data || []), ...tmNorm]
+  const all = [...regList, ...tmList]
+    .filter(m => m.played_at)
     .sort((a, b) => new Date(a.played_at) - new Date(b.played_at));
 
   if (!all.length) return [];
 
+  // ── Backward pass: reconstruct Elo at each point ──────────────────────────
+  // We know the current Elo. Walk newest→oldest, computing "before" each match.
+  // If a match already has stored before/after values, use those as an anchor.
+  let elo = currentElo;
+  const entries = []; // filled newest→oldest, then reversed
+
+  for (let i = all.length - 1; i >= 0; i--) {
+    const m = all[i];
+    const isWin = m.winner_id === playerId;
+
+    let before, after;
+    if (m._type === 'match' && m.elo_winner_before != null) {
+      // Regular match with stored snapshots — use them directly
+      after  = isWin ? m.elo_winner_after  : m.elo_loser_after;
+      before = isWin ? m.elo_winner_before : m.elo_loser_before;
+      elo = before; // re-anchor running value
+    } else {
+      // Tournament match (or legacy) without stored snapshots — reconstruct
+      after = elo; // elo right now IS what it was after this match
+      const delta = isWin ? (m.delta || 0) : (m.loss ?? m.delta ?? 0);
+      before = after - (isWin ? delta : -delta);
+      elo = before;
+    }
+
+    entries.push({ before, after, win: isWin, date: new Date(m.played_at) });
+  }
+
+  entries.reverse(); // back to chronological order
+
+  // Build pts: starting Elo + one point per match
   const pts = [];
-  const first = all[0];
-  // Starting Elo (before the very first match)
-  pts.push({
-    elo:  first.winner_id === playerId ? first.elo_winner_before : first.elo_loser_before,
-    win:  null,
-    date: new Date(first.played_at || first.created_at)
-  });
-  for (const m of all) {
-    const win = m.winner_id === playerId;
-    pts.push({
-      elo:  win ? m.elo_winner_after : m.elo_loser_after,
-      win,
-      date: new Date(m.played_at || m.created_at)
-    });
+  pts.push({ elo: entries[0].before, win: null, date: entries[0].date });
+  for (const e of entries) {
+    pts.push({ elo: e.after, win: e.win, date: e.date });
   }
   return pts;
 }
