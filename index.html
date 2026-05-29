@@ -3087,68 +3087,22 @@ async function renderProfileView() {
     </div>`;
 
   // ── Stale-while-revalidate: paint from cache instantly, update silently ──
-  const _histCacheKey = `pl_hist_${p.id}`;
+  const _histCacheKey   = `pl_hist_${p.id}`;
+  const _matchCacheKey  = `pl_recent_${p.id}`;
+
   function _applyHistData(pts) {
     _eloHistMain = pts;
     const chartEl = $el('pv-chart');
     if (chartEl) chartEl.innerHTML = renderEloChart(pts, _eloFilterMain);
   }
-  // Paint from cache immediately (no loading flash)
-  try {
-    const raw = localStorage.getItem(_histCacheKey);
-    if (raw) {
-      const cached = JSON.parse(raw).map(pt=>({...pt, date:pt.date?new Date(pt.date):null}));
-      _applyHistData(cached);
+
+  function _applyMatchData(allMatches) {
+    const matchEl = $el('pv-matches');
+    if (!matchEl) return;
+    if (!allMatches.length) {
+      matchEl.innerHTML = '<div class="text-muted" style="font-size:.85rem">Noch keine Matches.</div>';
+      return;
     }
-  } catch {}
-
-  // Kick off stats (monthly + H2H + form) immediately
-  buildH2HSelects();
-  renderStatsView();
-
-  // Fetch fresh data (chart + recent matches, including tournament games)
-  const [histData, matchRes, tmMatchRes] = await Promise.all([
-    loadPlayerEloHistory(p.id),
-    withTimeout(
-      db.from('matches').select('*').or(`winner_id.eq.${p.id},loser_id.eq.${p.id}`).order('played_at',{ascending:false}).limit(10),
-      10000, {data:null}
-    ),
-    withTimeout(
-      db.from('tournament_matches')
-        .select('id,player1_id,player2_id,winner_id,score1,score2,elo_delta,elo_loss,completed_at')
-        .or(`player1_id.eq.${p.id},player2_id.eq.${p.id}`)
-        .not('winner_id','is',null)
-        .not('completed_at','is',null)
-        .order('completed_at',{ascending:false})
-        .limit(10),
-      10000, {data:null}
-    )
-  ]);
-
-  // Silently update chart + form indicator with fresh data
-  _applyHistData(histData);
-  try { localStorage.setItem(_histCacheKey, JSON.stringify(histData)); } catch {}
-
-  // Merge + sort last 10 matches (regular + tournament)
-  const matchEl = $el('pv-matches');
-  if (!matchEl) return;
-  const regMatches = (matchRes?.data || []).map(m => ({...m, _isTm:false}));
-  const tmMatches  = (tmMatchRes?.data || []).map(m => ({
-    _isTm: true,
-    winner_id: m.winner_id,
-    loser_id:  m.winner_id === m.player1_id ? m.player2_id : m.player1_id,
-    sets: m.score1!=null ? [{p1:m.score1, p2:m.score2}] : [],
-    elo_delta: m.elo_delta || 0,
-    elo_loss:  m.elo_loss ?? m.elo_delta ?? 0,
-    played_at: m.completed_at,
-  }));
-  const allMatches = [...regMatches, ...tmMatches]
-    .sort((a,b) => new Date(b.played_at) - new Date(a.played_at))
-    .slice(0, 10);
-
-  if (!allMatches.length) {
-    matchEl.innerHTML = '<div class="text-muted" style="font-size:.85rem">Noch keine Matches.</div>';
-  } else {
     matchEl.innerHTML = allMatches.map(m => {
       const isW = m.winner_id === p.id;
       const opp = byId(isW ? m.loser_id : m.winner_id);
@@ -3169,6 +3123,60 @@ async function renderProfileView() {
       </div>`;
     }).join('');
   }
+
+  // Paint both chart + match list from cache immediately (no loading flash)
+  try {
+    const raw = localStorage.getItem(_histCacheKey);
+    if (raw) _applyHistData(JSON.parse(raw).map(pt=>({...pt, date:pt.date?new Date(pt.date):null})));
+  } catch {}
+  try {
+    const raw = localStorage.getItem(_matchCacheKey);
+    if (raw) _applyMatchData(JSON.parse(raw));
+  } catch {}
+
+  // Kick off stats (monthly + H2H + form) immediately
+  buildH2HSelects();
+  renderStatsView();
+
+  // Fetch fresh data in background — chart + matches both update silently
+  const [histData, matchRes, tmMatchRes] = await Promise.all([
+    loadPlayerEloHistory(p.id),
+    withTimeout(
+      db.from('matches').select('*').or(`winner_id.eq.${p.id},loser_id.eq.${p.id}`).order('played_at',{ascending:false}).limit(10),
+      10000, {data:null}
+    ),
+    withTimeout(
+      db.from('tournament_matches')
+        .select('id,player1_id,player2_id,winner_id,score1,score2,elo_delta,elo_loss,completed_at')
+        .or(`player1_id.eq.${p.id},player2_id.eq.${p.id}`)
+        .not('winner_id','is',null)
+        .not('completed_at','is',null)
+        .order('completed_at',{ascending:false})
+        .limit(10),
+      10000, {data:null}
+    )
+  ]);
+
+  // Silently update chart
+  _applyHistData(histData);
+  try { localStorage.setItem(_histCacheKey, JSON.stringify(histData)); } catch {}
+
+  // Merge + sort last 10 matches (regular + tournament), update silently
+  const regMatches = (matchRes?.data || []).map(m => ({...m, _isTm:false}));
+  const tmMatches  = (tmMatchRes?.data || []).map(m => ({
+    _isTm: true,
+    winner_id: m.winner_id,
+    loser_id:  m.winner_id === m.player1_id ? m.player2_id : m.player1_id,
+    sets: m.score1!=null ? [{p1:m.score1, p2:m.score2}] : [],
+    elo_delta: m.elo_delta || 0,
+    elo_loss:  m.elo_loss ?? m.elo_delta ?? 0,
+    played_at: m.completed_at,
+  }));
+  const allMatches = [...regMatches, ...tmMatches]
+    .sort((a,b) => new Date(b.played_at) - new Date(a.played_at))
+    .slice(0, 10);
+  _applyMatchData(allMatches);
+  try { localStorage.setItem(_matchCacheKey, JSON.stringify(allMatches)); } catch {}
 }
 
 // ── ONBOARDING ────────────────────────────────────────────────────────────
