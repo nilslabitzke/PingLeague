@@ -174,6 +174,8 @@
     /* CARD */
     .card { background:var(--card); border-radius:var(--radius); border:1px solid var(--border); padding:1.5rem; margin-bottom:1rem; }
     .card-title { font-weight:700; font-size:.95rem; margin-bottom:1.1rem; }
+    .ef-btn { font-size:.72rem; font-weight:700; padding:.2rem .55rem; border-radius:20px; border:1px solid var(--border); background:var(--surface); color:var(--text-muted); cursor:pointer; transition:background .15s,color .15s,border-color .15s; }
+    .ef-btn.active,.ef-btn:hover { background:var(--primary); color:#fff; border-color:var(--primary); }
 
     /* MATCH FORM */
     .match-form { max-width:580px; }
@@ -885,6 +887,33 @@ function applyEloFactor(elo, wElo, lElo, factor) {
   return { gain, loss, wNew: Math.max(ELO_MIN, wElo + gain), lNew: Math.max(ELO_MIN, lElo - loss) };
 }
 let _matchMode = 'classic';
+let _eloHistMain = null, _eloFilterMain = null;
+let _eloHistOverlay = null, _eloFilterOverlay = null;
+
+function setEloFilterMain(n) {
+  _eloFilterMain = n;
+  [5, 10, null].forEach(v => {
+    const id = v != null ? `pv-ef-${v}` : 'pv-ef-all';
+    const el = $el(id);
+    if (el) el.classList.toggle('active', n === v);
+  });
+  if (_eloHistMain) {
+    const chartEl = $el('pv-chart');
+    if (chartEl) chartEl.innerHTML = renderEloChart(_eloHistMain, n);
+  }
+}
+function setEloFilterOverlay(n) {
+  _eloFilterOverlay = n;
+  [5, 10, null].forEach(v => {
+    const id = v != null ? `pc-ef-${v}` : 'pc-ef-all';
+    const el = $el(id);
+    if (el) el.classList.toggle('active', n === v);
+  });
+  if (_eloHistOverlay) {
+    const chartEl = $el('profile-chart');
+    if (chartEl) chartEl.innerHTML = renderEloChart(_eloHistOverlay, n);
+  }
+}
 
 function selectMatchMode(mode) {
   _matchMode = mode;
@@ -1639,8 +1668,15 @@ async function openProfile(playerId) {
       <div class="pstat"><div class="pstat-val" style="color:var(--error)">${p.losses}</div><div class="pstat-label">Niederl.</div></div>
       <div class="pstat"><div class="pstat-val">${wr}%</div><div class="pstat-label">Quote</div></div>
     </div>
-    <div class="profile-section-title">Elo-Verlauf</div>
-    <div class="chart-wrap" id="profile-chart" style="min-height:60px"></div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.1rem;margin-bottom:.55rem">
+      <div class="profile-section-title" style="margin:0">Elo-Verlauf</div>
+      <div style="display:flex;gap:.3rem">
+        <button id="pc-ef-5"   class="ef-btn"        onclick="setEloFilterOverlay(5)">5</button>
+        <button id="pc-ef-10"  class="ef-btn"        onclick="setEloFilterOverlay(10)">10</button>
+        <button id="pc-ef-all" class="ef-btn active" onclick="setEloFilterOverlay(null)">Alle</button>
+      </div>
+    </div>
+    <div class="chart-wrap" id="profile-chart" style="min-height:60px;margin-bottom:.5rem"></div>
     <div class="profile-section-title">Letzte Matches</div>
     <div id="profile-matches"><div class="text-muted" style="font-size:.88rem">Lade…</div></div>
     ${S.player&&playerId!==S.player.id?`
@@ -1650,12 +1686,18 @@ async function openProfile(playerId) {
   overlay.classList.add('open');
   document.body.style.overflow='hidden';
 
+  // Reset filter buttons to "Alle" on each open
+  _eloFilterOverlay = null;
+  ['pc-ef-5','pc-ef-10','pc-ef-all'].forEach(id => $el(id)?.classList.remove('active'));
+  $el('pc-ef-all')?.classList.add('active');
+
   // Paint chart from cache instantly (no "Lade…" seen)
   try {
     const raw = localStorage.getItem(`pl_hist_${playerId}`);
     if (raw) {
       const cached = JSON.parse(raw).map(pt=>({...pt, date:pt.date?new Date(pt.date):null}));
-      $el('profile-chart').innerHTML = renderEloChart(cached);
+      _eloHistOverlay = cached;
+      $el('profile-chart').innerHTML = renderEloChart(cached, null);
     }
   } catch {}
 
@@ -1669,8 +1711,9 @@ async function openProfile(playerId) {
   ]);
 
   // Update chart silently + refresh cache
+  _eloHistOverlay = histData;
   const pcEl = $el('profile-chart');
-  if (pcEl) pcEl.innerHTML = renderEloChart(histData);
+  if (pcEl) pcEl.innerHTML = renderEloChart(histData, _eloFilterOverlay);
   try { localStorage.setItem(`pl_hist_${playerId}`, JSON.stringify(histData)); } catch {}
 
   // Render recent matches
@@ -1779,56 +1822,71 @@ async function loadPlayerEloHistory(playerId) {
   return pts;
 }
 
-function renderEloChart(pts) {
-  // Filter out null/invalid elo entries (e.g. old tournament matches without elo data)
+function renderEloChart(pts, limit) {
+  // Filter out null/invalid elo entries
   const valid = (pts || []).filter(p => p.elo != null && isFinite(p.elo));
-  if (valid.length === 0) return '<p class="text-muted text-center" style="font-size:.85rem;padding:.75rem 0">Noch keine Elo-Daten vorhanden.</p>';
+  if (valid.length === 0) return '<p style="font-size:.82rem;color:var(--text-muted);text-align:center;padding:1.25rem 0;margin:0">Noch keine Elo-Daten vorhanden.</p>';
 
-  const W=480, H=160, pl=46, pr=18, pt=14, pb=22, iW=W-pl-pr, iH=H-pt-pb;
-  const elos = valid.map(p=>p.elo);
+  // Apply limit filter (show last N entries)
+  const disp = (limit && limit < valid.length) ? valid.slice(-limit) : valid;
+
+  const W=480, H=148, pl=46, pr=14, pt=22, pb=24;
+  const iW=W-pl-pr, iH=H-pt-pb;
+  const elos = disp.map(p=>p.elo);
   const rawMin=Math.min(...elos), rawMax=Math.max(...elos);
-
-  // Y: nice bounds with padding
   const spread = rawMax - rawMin;
-  const eloStep = spread<=30?10 : spread<=80?25 : spread<=200?50 : 100;
-  const pad = Math.max(eloStep*0.6, 5);
+  const eloStep = spread<=20?10 : spread<=60?20 : spread<=150?50 : 100;
+  const pad = Math.max(eloStep*0.75, 8);
   const minE = Math.floor((rawMin-pad)/eloStep)*eloStep;
   const maxE = Math.ceil((rawMax+pad)/eloStep)*eloStep;
   const range = maxE - minE || 1;
   const cy = e => pt + iH - ((e-minE)/range)*iH;
+  const n = disp.length;
+  const cx = i => pl + (n<=1 ? iW/2 : (i/(n-1))*iW);
 
-  // Y gridlines
+  const linePoints = disp.map((p,i)=>`${cx(i).toFixed(1)},${cy(p.elo).toFixed(1)}`).join(' ');
+  const baseY = (pt+iH).toFixed(1);
+  const areaPoints = `${cx(0).toFixed(1)},${baseY} ${linePoints} ${cx(n-1).toFixed(1)},${baseY}`;
+
   const yLines = [];
   for (let e=minE; e<=maxE; e+=eloStep) yLines.push({e, y:cy(e)});
 
-  // X: equal index spacing — shows every single match as its own column
-  const n = valid.length;
-  const cx = i => pl + (n<=1 ? iW/2 : (i/(n-1))*iW);
+  const currentElo = disp[n-1].elo;
+  const gradId = 'ecg' + (Math.random()*1e6|0);
 
-  const poly = valid.map((p,i)=>`${cx(i).toFixed(1)},${cy(p.elo).toFixed(1)}`).join(' ');
-
-  // Last point label position (shift left if near right edge)
-  const lastX=cx(n-1), lastY=cy(valid[n-1].elo);
-  const labelAnchor = lastX > pl+iW*0.75 ? 'end' : 'start';
-  const labelX = lastX + (labelAnchor==='end' ? -7 : 7);
-  const labelY = Math.max(pt+10, Math.min(lastY-4, pt+iH-4));
+  // Badge position: top-right corner
+  const badgeW = 54, badgeH = 20, badgeX = W-pr-badgeW, badgeY = 2;
 
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;overflow:visible">
-    <!-- Horizontal gridlines + Y labels -->
-    ${yLines.map(l=>`
-      <line x1="${pl}" y1="${l.y.toFixed(1)}" x2="${W-pr}" y2="${l.y.toFixed(1)}" stroke="var(--border)" stroke-width="1"/>
-      <text x="${pl-5}" y="${(l.y+3.5).toFixed(1)}" text-anchor="end" font-size="9" fill="var(--text-muted)">${l.e}</text>`).join('')}
-    <!-- Line connecting all points -->
-    ${n>1?`<polyline points="${poly}" fill="none" stroke="#43a047" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`:''}
-    <!-- Dots for every match -->
-    ${valid.map((p,i)=>`<circle cx="${cx(i).toFixed(1)}" cy="${cy(p.elo).toFixed(1)}" r="4" fill="#43a047" stroke="var(--card)" stroke-width="1.5"/>`).join('')}
-    <!-- Blue Y-axis -->
-    <line x1="${pl}" y1="${pt}" x2="${pl}" y2="${pt+iH}" stroke="#1e88e5" stroke-width="2.5" stroke-linecap="round"/>
-    <!-- Red X-axis -->
-    <line x1="${pl-1}" y1="${(pt+iH).toFixed(1)}" x2="${W-pr}" y2="${(pt+iH).toFixed(1)}" stroke="#e53935" stroke-width="2.5" stroke-linecap="round"/>
-    <!-- Current Elo label -->
-    <text x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" text-anchor="${labelAnchor}" font-size="11" font-weight="700" fill="#43a047">${valid[n-1].elo}</text>
-  </svg>`;
+  <defs>
+    <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7c7cf8" stop-opacity="0.32"/>
+      <stop offset="85%" stop-color="#7c7cf8" stop-opacity="0.03"/>
+    </linearGradient>
+    <clipPath id="${gradId}c"><rect x="${pl}" y="${pt}" width="${iW}" height="${iH}"/></clipPath>
+  </defs>
+  <!-- Y gridlines + labels -->
+  ${yLines.map(l=>`
+  <line x1="${pl}" y1="${l.y.toFixed(1)}" x2="${W-pr}" y2="${l.y.toFixed(1)}" stroke="var(--border)" stroke-width="1" stroke-dasharray="3,3"/>
+  <text x="${(pl-7).toFixed(1)}" y="${(l.y+3.5).toFixed(1)}" text-anchor="end" font-size="9.5" fill="var(--text-muted)">${l.e}</text>`).join('')}
+  <!-- Area fill -->
+  <polygon points="${areaPoints}" fill="url(#${gradId})" clip-path="url(#${gradId}c)"/>
+  <!-- Line -->
+  ${n>1?`<polyline points="${linePoints}" fill="none" stroke="#7c7cf8" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`:''}
+  <!-- Axis lines -->
+  <line x1="${pl}" y1="${pt}" x2="${pl}" y2="${pt+iH}" stroke="var(--border)" stroke-width="1"/>
+  <line x1="${pl}" y1="${(pt+iH).toFixed(1)}" x2="${W-pr}" y2="${(pt+iH).toFixed(1)}" stroke="var(--border)" stroke-width="1"/>
+  <!-- Dots (win=green, loss=red, start=grey) -->
+  ${disp.map((p,i)=>{
+    const isLast = i===n-1;
+    const col = isLast ? '#7c7cf8' : p.win===true ? '#3dd68c' : p.win===false ? '#ff6b6b' : '#6868a0';
+    const r = isLast ? 5.5 : 3.5;
+    return `<circle cx="${cx(i).toFixed(1)}" cy="${cy(p.elo).toFixed(1)}" r="${r}" fill="${col}" stroke="var(--card)" stroke-width="1.5"/>`;
+  }).join('')}
+  <!-- Current Elo badge (top-right) -->
+  <rect x="${badgeX}" y="${badgeY}" width="${badgeW}" height="${badgeH}" rx="${badgeH/2}" fill="#7c7cf8"/>
+  <text x="${(badgeX+badgeW/2).toFixed(1)}" y="${(badgeY+13.5).toFixed(1)}" text-anchor="middle" font-size="11" font-weight="800" fill="white">${currentElo}</text>
+</svg>`;
 }
 
 // ── STATS VIEW ────────────────────────────────────────────────────────────
@@ -2895,8 +2953,15 @@ async function renderProfileView() {
     </div>
 
     <div class="card" style="margin-bottom:1rem">
-      <div class="card-title">📈 Level-Entwicklung</div>
-      <div class="chart-wrap" id="pv-chart" style="padding:.5rem 0 0;min-height:80px"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.85rem">
+        <div style="font-weight:700;font-size:.95rem">📈 Level-Entwicklung</div>
+        <div style="display:flex;gap:.3rem">
+          <button id="pv-ef-5"   class="ef-btn"        onclick="setEloFilterMain(5)">5</button>
+          <button id="pv-ef-10"  class="ef-btn"        onclick="setEloFilterMain(10)">10</button>
+          <button id="pv-ef-all" class="ef-btn active" onclick="setEloFilterMain(null)">Alle</button>
+        </div>
+      </div>
+      <div class="chart-wrap" id="pv-chart" style="padding:.5rem 0 0;min-height:80px;margin-bottom:0"></div>
     </div>
 
     <div class="card" style="margin-bottom:1rem">
@@ -2929,8 +2994,9 @@ async function renderProfileView() {
   // ── Stale-while-revalidate: paint from cache instantly, update silently ──
   const _histCacheKey = `pl_hist_${p.id}`;
   function _applyHistData(pts) {
+    _eloHistMain = pts;
     const chartEl = $el('pv-chart');
-    if (chartEl) chartEl.innerHTML = renderEloChart(pts);
+    if (chartEl) chartEl.innerHTML = renderEloChart(pts, _eloFilterMain);
     const trend = computeFormTrend(pts);
     const formEl = $el('pv-form-indicator');
     if (formEl && trend) {
