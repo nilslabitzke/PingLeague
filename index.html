@@ -509,7 +509,7 @@
             <button class="mode-btn active" id="mode-btn-classic" onclick="selectMatchMode('classic')">🏓 Klassisch<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">Best of 3 · bis 11</span></button>
             <button class="mode-btn" id="mode-btn-21er" onclick="selectMatchMode('21er')">✨ 21er<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">1 Satz · bis 21</span></button>
             <button class="mode-btn" id="mode-btn-grand_slam" onclick="selectMatchMode('grand_slam')">🎾 Grand Slam<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">Best of 5 · bis 11</span></button>
-            <button class="mode-btn" id="mode-btn-risky_seven" onclick="selectMatchMode('risky_seven')">🃏 Risky Seven<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">1 Satz · bis 7 · ×0.5 Elo</span></button>
+            <button class="mode-btn" id="mode-btn-risky_seven" onclick="selectMatchMode('risky_seven')">🃏 Risky Seven<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">1 Satz · bis 7</span></button>
           </div>
         </div>
         <div class="card" id="elo-preview" style="display:none">
@@ -874,7 +874,7 @@ const MATCH_MODES = {
   classic:     { label:'🏓 Klassisch',   desc:'Best of 3 · Sätze bis 11 · bei 10:10 bis +2',  target:11, need:2, maxSets:3, eloFactor:1   },
   '21er':      { label:'✨ 21er',         desc:'1 Satz · bis 21 · bei 20:20 bis +2',            target:21, need:1, maxSets:1, eloFactor:1   },
   grand_slam:  { label:'🎾 Grand Slam',   desc:'Best of 5 · Sätze bis 11 · bei 10:10 bis +2',  target:11, need:3, maxSets:5, eloFactor:1   },
-  risky_seven: { label:'🃏 Risky Seven',  desc:'1 Satz · bis 7 · bei 6:6 bis +2 · ×0.5 Elo',  target:7,  need:1, maxSets:1, eloFactor:0.5 },
+  risky_seven: { label:'🃏 Risky Seven',  desc:'1 Satz · bis 7 · bei 6:6 bis +2',              target:7,  need:1, maxSets:1, eloFactor:0.5 },
 };
 
 // Apply an Elo-factor (e.g. 0.5 for Risky Seven) to a calcElo result
@@ -904,6 +904,8 @@ function selectMatchMode(mode) {
   $el('set3-row').style.display = mode==='grand_slam' ? 'flex' : 'none';
   $el('set4-row').style.display = 'none';
   $el('set5-row').style.display = 'none';
+  // Refresh Elo preview so values update immediately on mode switch
+  updateEloPreview();
 }
 
 function validSet(a, b) {
@@ -1931,9 +1933,8 @@ function updateEloPreview() {
   const ifLRaw=calcElo(p2.elo,p1.elo,p2.matches,p1.matches);
   const ifW=applyEloFactor(ifWRaw,p1.elo,p2.elo,factor);
   const ifL=applyEloFactor(ifLRaw,p2.elo,p1.elo,factor);
-  const factorHint = factor!==1 ? ` <span style="font-size:.72rem;color:var(--warn)">×${factor}</span>` : '';
-  $el('ep-win-val').innerHTML=`+${ifW.gain}${factorHint}`; $el('ep-win-tot').textContent=`→ ${ifW.wNew}`;
-  $el('ep-loss-val').innerHTML=`−${ifL.loss}${factorHint}`; $el('ep-loss-tot').textContent=`→ ${ifL.lNew}`;
+  $el('ep-win-val').textContent=`+${ifW.gain}`; $el('ep-win-tot').textContent=`→ ${ifW.wNew}`;
+  $el('ep-loss-val').textContent=`−${ifL.loss}`; $el('ep-loss-tot').textContent=`→ ${ifL.lNew}`;
 }
 
 function onScoreInput() {
