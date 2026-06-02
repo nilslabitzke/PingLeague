@@ -4,6 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>PingLeague</title>
+  <link rel="manifest" href="/PingLeague/manifest.json">
+  <meta name="theme-color" content="#7c7cf8">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="PingLeague">
+  <link rel="apple-touch-icon" href="/PingLeague/icon.svg">
   <script>(function(){var t=localStorage.getItem('pl_theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');})()</script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
@@ -3459,6 +3465,15 @@ function init() {
   setInterval(() => _doRefresh(false), AUTO_REFRESH_MS);
 }
 init();
+</script>
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('/PingLeague/sw.js')
+        .then(function(reg) { console.log('[SW] Registered, scope:', reg.scope); })
+        .catch(function(err) { console.warn('[SW] Registration failed:', err); });
+    });
+  }
 </script>
 </body>
 </html>

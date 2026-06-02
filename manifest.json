@@ -1,0 +1,26 @@
+{
+  "name": "PingLeague",
+  "short_name": "PingLeague",
+  "description": "Das Tischtennis-Ranking für dein Team",
+  "lang": "de",
+  "start_url": "/PingLeague/",
+  "scope": "/PingLeague/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0d0d14",
+  "theme_color": "#7c7cf8",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
