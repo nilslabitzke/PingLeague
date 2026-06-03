@@ -108,6 +108,13 @@
     .alert-success { background:rgba(61,214,140,.12);  border:1px solid rgba(61,214,140,.3);  color:var(--success); }
     .alert-info    { background:rgba(124,124,248,.12); border:1px solid rgba(124,124,248,.3); color:var(--primary-lt); }
 
+    /* SPORT SWITCHER */
+    #sport-bar { background:var(--surface); border-bottom:2px solid var(--border); display:flex; justify-content:center; gap:.5rem; padding:.42rem 1rem; position:sticky; top:58px; z-index:99; }
+    .sport-btn { padding:.28rem .95rem; border-radius:20px; border:1.5px solid var(--border); background:none; color:var(--text-muted); cursor:pointer; font-size:.8rem; font-weight:700; transition:all .15s; letter-spacing:.02em; }
+    .sport-btn.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+    .sport-btn:hover:not(.active) { background:var(--card-hover); color:var(--text); border-color:var(--primary-lt); }
+    [data-sport="padel"].sport-btn.active { background:var(--success); border-color:var(--success); }
+
     /* HEADER */
     #app-page { display:none; }
     header { background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:100; }
@@ -243,6 +250,9 @@
     .pstat { background:var(--card); border-radius:var(--radius-sm); padding:.75rem; text-align:center; }
     .pstat-val { font-size:1.35rem; font-weight:800; }
     .pstat-label { font-size:.7rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; margin-top:.15rem; }
+    .pstat-clickable { cursor:pointer; transition:background .15s; }
+    .pstat-clickable:hover { background:var(--card-hover); }
+    .pstat-clickable:hover .pstat-val { text-decoration:underline; text-underline-offset:2px; }
     .profile-section-title { font-size:.8rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-muted); margin-bottom:.75rem; }
     .profile-form { display:flex; gap:.4rem; align-items:center; margin-bottom:1.5rem; }
     .chart-wrap { margin-bottom:1.5rem; background:var(--card); border-radius:var(--radius); padding:1rem; border:1px solid var(--border); }
@@ -459,6 +469,12 @@
     </div>
   </div>
 
+  <!-- SPORT SWITCHER BAR -->
+  <div id="sport-bar">
+    <button class="sport-btn active" id="sport-btn-tt" data-sport="tt" onclick="setSport('tt')">🏓 Tischtennis</button>
+    <button class="sport-btn" id="sport-btn-padel" data-sport="padel" onclick="setSport('padel')">🎾 Padel</button>
+  </div>
+
   <main>
     <!-- PROFIL -->
     <div id="view-profile" class="view active">
@@ -513,11 +529,15 @@
         </div>
         <div class="card" style="padding:1rem 1.25rem">
           <div class="card-title" style="margin-bottom:.75rem">Modus</div>
-          <div style="display:flex;gap:.5rem">
+          <div id="tt-modes" style="display:flex;gap:.5rem;flex-wrap:wrap">
             <button class="mode-btn active" id="mode-btn-classic" onclick="selectMatchMode('classic')">🏓 Klassisch<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">Best of 3 · bis 11</span></button>
             <button class="mode-btn" id="mode-btn-21er" onclick="selectMatchMode('21er')">✨ 21er<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">1 Satz · bis 21</span></button>
             <button class="mode-btn" id="mode-btn-grand_slam" onclick="selectMatchMode('grand_slam')">🎾 Grand Slam<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">Best of 5 · bis 11</span></button>
             <button class="mode-btn" id="mode-btn-risky_seven" onclick="selectMatchMode('risky_seven')">🃏 Risky Seven<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">1 Satz · bis 7</span></button>
+          </div>
+          <div id="padel-modes" style="display:none;gap:.5rem;flex-wrap:wrap">
+            <button class="mode-btn active" id="mode-btn-padel_standard" onclick="selectMatchMode('padel_standard')">🎾 Standard<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">Best of 3 · bis 6</span></button>
+            <button class="mode-btn" id="mode-btn-padel_express" onclick="selectMatchMode('padel_express')">⚡ Express<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">1 Satz · bis 6</span></button>
           </div>
         </div>
         <div class="card" id="elo-preview" style="display:none">
@@ -738,6 +758,17 @@
   </div>
 </div>
 
+<!-- MATCH LIST SHEET (Siege / Niederlagen detail) -->
+<div class="tr-overlay" id="matchlist-overlay" onclick="if(event.target===this)closeMatchList()">
+  <div class="tr-sheet" style="max-width:440px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+      <div style="font-size:.95rem;font-weight:800" id="matchlist-title"></div>
+      <button onclick="closeMatchList()" style="background:none;border:none;color:var(--text-muted);font-size:1.1rem;cursor:pointer;padding:.1rem .35rem;line-height:1">✕</button>
+    </div>
+    <div id="matchlist-body" style="max-height:62vh;overflow-y:auto"></div>
+  </div>
+</div>
+
 <!-- PROFILE MODAL -->
 <div class="profile-overlay" id="profile-overlay" onclick="closeProfile(event)">
   <div class="profile-sheet" id="profile-sheet">
@@ -801,7 +832,7 @@ const SUPABASE_URL = 'https://xsxsyfaxhwrbllvvfxxm.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhzeHN5ZmF4aHdyYmxsdnZmeHhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk2MTM1NzIsImV4cCI6MjA5NTE4OTU3Mn0.y35dDJTrkCNMU7P0V4H8iSMprITdRst9kl7B5_BMvc8';
 const db = supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession:true, autoRefreshToken:true, detectSessionInUrl:true, storage:window.localStorage } });
 
-let S = { user:null, player:null, isAdmin:false, players:[], challenges:[], tournaments:[], currentTournament:null, settings:{ k_high:32, k_low:16 }, reportCount:0, leagues:[], memberships:[], currentLeague:'' };
+let S = { user:null, player:null, isAdmin:false, players:[], challenges:[], tournaments:[], currentTournament:null, settings:{ k_high:32, k_low:16 }, reportCount:0, leagues:[], memberships:[], currentLeague:'', sport:'tt', _ttPlayer:null };
 
 // ── THEME ────────────────────────────────────────────────────────────────
 function applyTheme(theme) {
@@ -879,10 +910,12 @@ function levelLabel(lvl) {
 // ── SET VALIDATION ────────────────────────────────────────────────────────
 // ── MATCH MODES ───────────────────────────────────────────────────────────
 const MATCH_MODES = {
-  classic:     { label:'🏓 Klassisch',   desc:'Best of 3 · Sätze bis 11 · bei 10:10 bis +2',  target:11, need:2, maxSets:3, eloFactor:1   },
-  '21er':      { label:'✨ 21er',         desc:'1 Satz · bis 21 · bei 20:20 bis +2',            target:21, need:1, maxSets:1, eloFactor:1   },
-  grand_slam:  { label:'🎾 Grand Slam',   desc:'Best of 5 · Sätze bis 11 · bei 10:10 bis +2',  target:11, need:3, maxSets:5, eloFactor:1   },
-  risky_seven: { label:'🃏 Risky Seven',  desc:'1 Satz · bis 7 · bei 6:6 bis +2',              target:7,  need:1, maxSets:1, eloFactor:0.5 },
+  classic:        { label:'🏓 Klassisch',   desc:'Best of 3 · Sätze bis 11 · bei 10:10 bis +2',     target:11, need:2, maxSets:3, eloFactor:1,   sport:'tt'    },
+  '21er':         { label:'✨ 21er',         desc:'1 Satz · bis 21 · bei 20:20 bis +2',               target:21, need:1, maxSets:1, eloFactor:1,   sport:'tt'    },
+  grand_slam:     { label:'🎾 Grand Slam',   desc:'Best of 5 · Sätze bis 11 · bei 10:10 bis +2',     target:11, need:3, maxSets:5, eloFactor:1,   sport:'tt'    },
+  risky_seven:    { label:'🃏 Risky Seven',  desc:'1 Satz · bis 7 · bei 6:6 bis +2',                 target:7,  need:1, maxSets:1, eloFactor:0.5, sport:'tt'    },
+  padel_standard: { label:'🎾 Padel',        desc:'Best of 3 · Sätze bis 6 · Tiebreak bei 6:6',      target:6,  need:2, maxSets:3, eloFactor:1,   sport:'padel' },
+  padel_express:  { label:'🎾 Padel Express',desc:'1 Satz · bis 6 · Tiebreak bei 6:6',               target:6,  need:1, maxSets:1, eloFactor:0.7, sport:'padel' },
 };
 
 // Apply an Elo-factor (e.g. 0.5 for Risky Seven) to a calcElo result
@@ -934,7 +967,7 @@ function selectMatchMode(mode) {
   });
   $el('match-result-preview').innerHTML=''; $el('match-alert').innerHTML='';
   // Row visibility per mode
-  const singleSet = mode==='21er'||mode==='risky_seven';
+  const singleSet = mode==='21er'||mode==='risky_seven'||mode==='padel_express';
   $el('set2-row').style.display = singleSet ? 'none' : '';
   $el('set3-row').style.display = mode==='grand_slam' ? 'flex' : 'none';
   $el('set4-row').style.display = 'none';
@@ -946,6 +979,14 @@ function selectMatchMode(mode) {
 function validSet(a, b) {
   a = Number(a); b = Number(b);
   if (!Number.isFinite(a) || !Number.isFinite(b)) return false;
+  // Padel sets: 6:x, 7:5, or 7:6 (tiebreak)
+  if (_matchMode === 'padel_standard' || _matchMode === 'padel_express') {
+    const hi = Math.max(a, b), lo = Math.min(a, b);
+    if (hi === 7 && lo === 6) return true; // tiebreak
+    if (hi === 7 && lo === 5) return true; // 7:5
+    if (hi === 6 && lo >= 0 && lo <= 4) return true;
+    return false;
+  }
   const target = MATCH_MODES[_matchMode]?.target ?? 11;
   const hi = Math.max(a, b), lo = Math.min(a, b);
   if (hi < target || hi - lo < 2) return false;
@@ -1472,9 +1513,11 @@ async function setupUser(user) {
   // ── STEP 1: Show cached data instantly ────────────────────────────────
   const cached = getCachedPlayers();
   if (cached) {
-    S.players = cached;
-    const cpd = cached.find(p => p.user_id === user.id) || null;
+    // Cache may contain all sports; filter to current sport for display
+    S.players = cached.filter(p => (p.sport || 'tt') === S.sport);
+    const cpd = S.players.find(p => p.user_id === user.id) || null;
     applyPlayerData(cpd, user);
+    updateSportBar();
     renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
     if (!alreadyInApp) showView('profile'); // only navigate on fresh start
   }
@@ -1508,6 +1551,8 @@ async function setupUser(user) {
   }
 
   applyPlayerData(pd, user);
+  S._ttPlayer = pd; // remember TT player for later padel profile creation
+  updateSportBar();
   renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
   loadChallenges();      // load badge in background
   if (S.isAdmin) loadAdminReports(); // load report badge for admin
@@ -1523,7 +1568,7 @@ async function setupUser(user) {
 async function loadPlayers() {
   try {
     const {data, error} = await withTimeout(
-      db.from('players').select('*').order('elo',{ascending:false}),
+      db.from('players').select('*').eq('sport', S.sport).order('elo',{ascending:false}),
       15000, {data: null, error: 'timeout'}
     );
     if (!data || error) { console.error('loadPlayers:', error||'timeout'); return false; }
@@ -1572,7 +1617,7 @@ function renderRanking() {
 
   // ── Load form dots in background (failure = dots just stay empty) ─────
   withTimeout(
-    db.from('matches').select('winner_id,loser_id,played_at').order('played_at',{ascending:false}).limit(200),
+    db.from('matches').select('winner_id,loser_id,played_at').eq('sport',S.sport).order('played_at',{ascending:false}).limit(200),
     8000, {data: null}
   ).then(res => {
     const recent = res?.data || [];
@@ -1670,8 +1715,8 @@ async function openProfile(playerId) {
     ${S.player&&playerId!==S.player.id?`<button class="btn btn-primary btn-full" style="margin-bottom:1.25rem" onclick="sendChallenge('${playerId}');closeProfile()">⚔️ Herausfordern</button>`:''}
     <div class="profile-stats-grid">
       <div class="pstat"><div class="pstat-val">${p.matches}</div><div class="pstat-label">Matches</div></div>
-      <div class="pstat"><div class="pstat-val" style="color:var(--success)">${p.wins}</div><div class="pstat-label">Siege</div></div>
-      <div class="pstat"><div class="pstat-val" style="color:var(--error)">${p.losses}</div><div class="pstat-label">Niederl.</div></div>
+      <div class="pstat pstat-clickable" onclick="openMatchList('${playerId}','wins')" title="Siege anzeigen"><div class="pstat-val" style="color:var(--success)">${p.wins}</div><div class="pstat-label">Siege ›</div></div>
+      <div class="pstat pstat-clickable" onclick="openMatchList('${playerId}','losses')" title="Niederlagen anzeigen"><div class="pstat-val" style="color:var(--error)">${p.losses}</div><div class="pstat-label">Niederl. ›</div></div>
       <div class="pstat"><div class="pstat-val">${wr}%</div><div class="pstat-label">Quote</div></div>
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-top:1.1rem;margin-bottom:.55rem">
@@ -1711,7 +1756,7 @@ async function openProfile(playerId) {
   const [histData, matchData, tmMatchData] = await Promise.all([
     loadPlayerEloHistory(playerId),
     withTimeout(
-      db.from('matches').select('*').or(`winner_id.eq.${playerId},loser_id.eq.${playerId}`).order('played_at',{ascending:false}).limit(10),
+      db.from('matches').select('*').eq('sport',S.sport).or(`winner_id.eq.${playerId},loser_id.eq.${playerId}`).order('played_at',{ascending:false}).limit(10),
       10000, {data:null}
     ),
     withTimeout(
@@ -1793,24 +1838,29 @@ async function loadPlayerEloHistory(playerId) {
   // Current Elo is needed for backward reconstruction of old matches
   const currentElo = (byId(playerId) || S.player)?.elo ?? 1000;
 
-  // Fetch regular matches + ALL tournament matches (including those without before-Elo snapshots)
+  // Fetch regular matches + tournament matches (TT only) for Elo reconstruction
+  const tmHistPromise = S.sport === 'tt'
+    ? withTimeout(
+        db.from('tournament_matches')
+          .select('winner_id,player1_id,player2_id,elo_winner_before,elo_loser_before,elo_delta,elo_loss,completed_at')
+          .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
+          .not('winner_id','is',null)
+          .not('completed_at','is',null)
+          .order('completed_at',{ascending:true}),
+        10000, {data:null}
+      )
+    : Promise.resolve({data:[]});
+
   const [regRes, tmRes] = await Promise.all([
     withTimeout(
       db.from('matches')
         .select('winner_id,elo_winner_before,elo_winner_after,elo_loser_before,elo_loser_after,elo_delta,played_at')
+        .eq('sport', S.sport)
         .or(`winner_id.eq.${playerId},loser_id.eq.${playerId}`)
         .order('played_at',{ascending:true}),
       10000, {data:null}
     ),
-    withTimeout(
-      db.from('tournament_matches')
-        .select('winner_id,player1_id,player2_id,elo_winner_before,elo_loser_before,elo_delta,elo_loss,completed_at')
-        .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
-        .not('winner_id','is',null)
-        .not('completed_at','is',null)
-        .order('completed_at',{ascending:true}),
-      10000, {data:null}
-    )
+    tmHistPromise
   ]);
 
   // Merge into a unified list, sorted chronologically
@@ -2162,7 +2212,7 @@ async function submitMatch() {
 
   let sets=[], p1s=0, p2s=0;
 
-  if (_matchMode==='21er'||_matchMode==='risky_seven') {
+  if (_matchMode==='21er'||_matchMode==='risky_seven'||_matchMode==='padel_express') {
     const target=MATCH_MODES[_matchMode].target;
     const a=$el('s1a').value, b=$el('s1b').value;
     if (!validSet(a,b)) { alEl.innerHTML=`<div class="alert alert-error">Bitte gültigen Satz bis ${target} eintragen.</div>`; return; }
@@ -2217,7 +2267,8 @@ async function submitMatch() {
       p_elo_loser_before:  l.elo,
       p_elo_loser_after:   elo.lNew,
       p_elo_delta:         elo.gain,
-      p_match_mode:        _matchMode
+      p_match_mode:        _matchMode,
+      p_sport:             S.sport
     });
     if (error) throw error;
     clearMatchForm();
@@ -2233,7 +2284,7 @@ function clearMatchForm() {
   ['s1a','s1b','s2a','s2b','s3a','s3b','s4a','s4b','s5a','s5b'].forEach(id=>$el(id).value='');
   ['s1-tag','s2-tag','s3-tag','s4-tag','s5-tag'].forEach(id=>{$el(id).textContent='';$el(id).className='set-tag';});
   // Re-apply current mode row visibility
-  $el('set2-row').style.display = (_matchMode==='21er'||_matchMode==='risky_seven') ? 'none' : '';
+  $el('set2-row').style.display = (_matchMode==='21er'||_matchMode==='risky_seven'||_matchMode==='padel_express') ? 'none' : '';
   $el('set3-row').style.display = _matchMode==='grand_slam' ? 'flex' : 'none';
   $el('set4-row').style.display='none'; $el('set5-row').style.display='none';
   $el('match-result-preview').innerHTML='';
@@ -2249,20 +2300,26 @@ async function loadHistory() {
   const el=$el('history-list'); el.innerHTML='<div class="empty-state"><div class="empty-icon">⏳</div><p>Lade…</p></div>';
   const filt=$el('history-filter').value;
 
-  // Fetch regular matches + tournament matches in parallel
-  let qReg = db.from('matches').select('*').order('played_at',{ascending:false}).limit(60);
+  // Fetch regular matches (+ tournament matches for TT only) in parallel
+  let qReg = db.from('matches').select('*').eq('sport',S.sport).order('played_at',{ascending:false}).limit(60);
   if (filt) qReg = qReg.or(`winner_id.eq.${filt},loser_id.eq.${filt}`);
-  let qTm = db.from('tournament_matches')
-    .select('id,tournament_id,player1_id,player2_id,winner_id,score1,score2,elo_delta,elo_loss,elo_winner_before,elo_loser_before,completed_at')
-    .not('winner_id','is',null)
-    .not('completed_at','is',null)
-    .order('completed_at',{ascending:false})
-    .limit(60);
-  if (filt) qTm = qTm.or(`player1_id.eq.${filt},player2_id.eq.${filt}`);
+
+  // Tournaments are TT-only for now
+  let tmPromise = Promise.resolve({data:[], error:null});
+  if (S.sport === 'tt') {
+    let qTm = db.from('tournament_matches')
+      .select('id,tournament_id,player1_id,player2_id,winner_id,score1,score2,elo_delta,elo_loss,elo_winner_before,elo_loser_before,completed_at')
+      .not('winner_id','is',null)
+      .not('completed_at','is',null)
+      .order('completed_at',{ascending:false})
+      .limit(60);
+    if (filt) qTm = qTm.or(`player1_id.eq.${filt},player2_id.eq.${filt}`);
+    tmPromise = withTimeout(qTm, 10000, {data:null, error:null});
+  }
 
   const [regRes, tmRes] = await Promise.all([
     withTimeout(qReg, 10000, {data:null, error:{message:'Zeitüberschreitung'}}),
-    withTimeout(qTm,  10000, {data:null, error:null})
+    tmPromise
   ]);
 
   if (regRes.error) { el.innerHTML=`<div class="alert alert-error">Fehler: ${regRes.error.message}</div>`; return; }
@@ -2957,6 +3014,11 @@ function showView(id) {
   document.querySelectorAll('.nav-btn,.bnav-btn').forEach(b=>b.classList.remove('active'));
   $el(`view-${id}`).classList.add('active');
   document.querySelectorAll(`[data-view="${id}"]`).forEach(b=>b.classList.add('active'));
+  // Update match view header to reflect current sport
+  if (id === 'match') {
+    const h2 = document.querySelector('#view-match .view-header h2');
+    if (h2) h2.textContent = S.sport === 'padel' ? '🎾 Padel-Match' : '🏓 Match eintragen';
+  }
   if(id==='profile'){renderProfileView();}
   else if(id==='ranking'){loadPlayers().then(renderRanking);}
   else if(id==='admin'){renderAdminPlayers(); loadAdminReports();}
@@ -2993,10 +3055,69 @@ function toggleRankingHistory() {
 }
 
 // ── PROFILE VIEW (inline) ─────────────────────────────────────────────────
+// ── SPORT SWITCHER ────────────────────────────────────────────────────────
+function updateSportBar() {
+  ['tt','padel'].forEach(s => $el(`sport-btn-${s}`)?.classList.toggle('active', s === S.sport));
+  // Match form: show sport-appropriate mode buttons
+  const isTT = S.sport === 'tt';
+  const ttEl = $el('tt-modes'), padEl = $el('padel-modes');
+  if (ttEl) ttEl.style.display = isTT ? 'flex' : 'none';
+  if (padEl) padEl.style.display = isTT ? 'none' : 'flex';
+}
+
+async function setSport(sport) {
+  if (S.sport === sport) return;
+  if (!S.user) return; // not logged in yet
+  // Remember TT player for name re-use when creating padel profile
+  if (S.sport === 'tt') S._ttPlayer = S.player;
+  S.sport = sport;
+  S.currentLeague = ''; // reset league filter (leagues are sport-specific)
+  // Clear sport-specific caches
+  try { localStorage.removeItem('pl_players'); } catch {}
+  try { localStorage.removeItem('pl_global_recent'); } catch {}
+  updateSportBar();
+  // Switch default match mode
+  if (sport === 'padel') {
+    _matchMode = 'padel_standard';
+    selectMatchMode('padel_standard');
+  } else {
+    _matchMode = 'classic';
+    selectMatchMode('classic');
+  }
+  // Load players for new sport
+  await loadPlayers();
+  const pd = S.players.find(p => p.user_id === S.user.id) || null;
+  applyPlayerData(pd, S.user);
+  renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
+  // Re-render current view (profile or ranking)
+  const activeView = document.querySelector('.view.active');
+  if (!activeView || activeView.id === 'view-profile') {
+    showView('profile'); renderProfileView();
+  }
+}
+
+function registerForPadel() {
+  if (!S.user) return;
+  // Re-use name/club from TT profile so user doesn't have to re-enter it
+  const ref = S._ttPlayer;
+  OB.pendingUser = {
+    id:    S.user.id,
+    name:  ref?.name  || S.user.email?.split('@')[0] || 'Spieler',
+    club:  ref?.club  || null,
+    email: S.user.email
+  };
+  OB.sport   = 'padel';
+  OB.step    = 0;
+  OB.answers = [];
+  OB.mode    = 'new';
+  showPage('onboarding');
+  obRender();
+}
+
 function refreshProfileMatches() {
   if (!S.player) return;
   // Clear both caches so the next render truly re-fetches from DB
-  try { localStorage.removeItem(`pl_recent_${S.player.id}`); } catch {}
+  try { localStorage.removeItem('pl_global_recent'); } catch {}
   try { localStorage.removeItem(`pl_hist_${S.player.id}`);   } catch {}
   // Spin the button while loading
   const btn = $el('pv-refresh-btn');
@@ -3006,9 +3127,124 @@ function refreshProfileMatches() {
   });
 }
 
+function closeMatchList() {
+  $el('matchlist-overlay').classList.remove('open');
+}
+
+async function openMatchList(playerId, type) {
+  const overlay = $el('matchlist-overlay');
+  const titleEl = $el('matchlist-title');
+  const bodyEl  = $el('matchlist-body');
+  const p = byId(playerId);
+
+  const label = type === 'wins' ? '🏆 Siege' : '💔 Niederlagen';
+  titleEl.textContent = p ? `${label} — ${p.name}` : label;
+  bodyEl.innerHTML = '<div class="text-muted" style="font-size:.85rem;padding:.5rem 0">Lade…</div>';
+  overlay.classList.add('open');
+
+  // Fetch matches where player won / lost from both tables in parallel
+  let regQ, tmQ;
+  if (type === 'wins') {
+    regQ = db.from('matches')
+      .select('id,winner_id,loser_id,sets,elo_delta,match_mode,played_at')
+      .eq('sport', S.sport)
+      .eq('winner_id', playerId)
+      .order('played_at', {ascending:false})
+      .limit(60);
+    tmQ = db.from('tournament_matches')
+      .select('id,player1_id,player2_id,winner_id,score1,score2,elo_delta,elo_loss,completed_at')
+      .eq('winner_id', playerId)
+      .not('completed_at','is',null)
+      .order('completed_at', {ascending:false})
+      .limit(60);
+  } else {
+    regQ = db.from('matches')
+      .select('id,winner_id,loser_id,sets,elo_delta,elo_loser_before,elo_loser_after,match_mode,played_at')
+      .eq('sport', S.sport)
+      .eq('loser_id', playerId)
+      .order('played_at', {ascending:false})
+      .limit(60);
+    tmQ = db.from('tournament_matches')
+      .select('id,player1_id,player2_id,winner_id,score1,score2,elo_delta,elo_loss,completed_at')
+      .neq('winner_id', playerId)
+      .or(`player1_id.eq.${playerId},player2_id.eq.${playerId}`)
+      .not('winner_id','is',null)
+      .not('completed_at','is',null)
+      .order('completed_at', {ascending:false})
+      .limit(60);
+  }
+
+  const [regRes, tmRes] = await Promise.all([
+    withTimeout(regQ, 10000, {data:null}),
+    withTimeout(tmQ,  10000, {data:null}),
+  ]);
+
+  const isWins = type === 'wins';
+  const regList = (regRes?.data || []).map(m => ({
+    _isTm: false,
+    winner_id: m.winner_id,
+    loser_id: m.loser_id,
+    sets: m.sets || [],
+    elo_delta: m.elo_delta || 0,
+    elo_loss: Math.abs((m.elo_loser_before||0)-(m.elo_loser_after||0)),
+    match_mode: m.match_mode,
+    played_at: m.played_at,
+  }));
+  const tmList = (tmRes?.data || []).map(m => ({
+    _isTm: true,
+    winner_id: m.winner_id,
+    loser_id: m.winner_id === m.player1_id ? m.player2_id : m.player1_id,
+    sets: m.score1!=null ? [{p1:m.score1, p2:m.score2}] : [],
+    elo_delta: m.elo_delta || 0,
+    elo_loss: m.elo_loss ?? m.elo_delta ?? 0,
+    match_mode: null,
+    played_at: m.completed_at,
+  }));
+
+  const all = [...regList, ...tmList]
+    .sort((a,b) => new Date(b.played_at) - new Date(a.played_at));
+
+  if (!all.length) {
+    bodyEl.innerHTML = `<div class="text-muted" style="font-size:.85rem;padding:.5rem 0">Keine ${isWins?'Siege':'Niederlagen'} vorhanden.</div>`;
+    return;
+  }
+
+  bodyEl.innerHTML = all.map(m => {
+    const opp = byId(isWins ? m.loser_id : m.winner_id);
+    const sets = (m.sets||[]).map(s=>`<span class="set-chip">${s.p1??'?'}:${s.p2??'?'}</span>`).join('');
+    const delta = isWins
+      ? `<span style="color:var(--success);font-weight:700">+${m.elo_delta}</span>`
+      : `<span style="color:var(--error);font-weight:700">-${m.elo_loss}</span>`;
+    const dt = fmtDateShort(m.played_at);
+    const mb = m._isTm
+      ? `<span class="mode-badge">🏆 Turnier</span>`
+      : (m.match_mode&&m.match_mode!=='classic'?`<span class="mode-badge">${MATCH_MODES[m.match_mode]?.label||m.match_mode}</span>`:'');
+    const resultDot = isWins
+      ? `<span style="font-size:.85rem;font-weight:700;color:var(--success)">✓</span>`
+      : `<span style="font-size:.85rem;font-weight:700;color:var(--error)">✗</span>`;
+    return `<div style="display:flex;align-items:center;gap:.75rem;padding:.55rem 0;border-bottom:1px solid var(--border)">
+      ${resultDot}
+      <span style="flex:1;font-size:.88rem;font-weight:600">${opp?esc(opp.name):'?'} ${mb}</span>
+      <div class="match-sets">${sets}</div>
+      ${delta}
+      <span style="font-size:.72rem;color:var(--text-dim);min-width:52px;text-align:right">${dt}</span>
+    </div>`;
+  }).join('');
+}
+
 async function renderProfileView() {
   const container = $el('profile-view-content');
   if (!S.player) {
+    if (S.sport === 'padel') {
+      container.innerHTML = `
+        <div class="card" style="text-align:center;padding:2.5rem 1.5rem;margin-bottom:1rem">
+          <div style="font-size:3.5rem;margin-bottom:1rem">🎾</div>
+          <div style="font-size:1.15rem;font-weight:800;margin-bottom:.5rem">Noch kein Padel-Profil</div>
+          <div style="color:var(--text-muted);font-size:.9rem;margin-bottom:1.5rem;line-height:1.5">Erstelle dein Padel-Profil und trage dich in die Rangliste ein. Der Level-Algorithmus bewertet dein Padel-Können separat von Tischtennis.</div>
+          <button class="btn btn-primary" onclick="registerForPadel()" style="font-size:1rem;padding:.65rem 1.6rem">🎾 Padel-Profil erstellen</button>
+        </div>`;
+      return;
+    }
     container.innerHTML = '<div class="empty-state"><div class="empty-icon">👤</div><p>Kein Spielerprofil gefunden.</p></div>';
     return;
   }
@@ -3049,8 +3285,8 @@ async function renderProfileView() {
     <div class="card" style="margin-bottom:1rem">
       <div class="profile-stats-grid" style="margin-bottom:${p.matches>0?'.85rem':'0'}">
         <div class="pstat"><div class="pstat-val">${p.matches}</div><div class="pstat-label">Matches</div></div>
-        <div class="pstat"><div class="pstat-val" style="color:var(--success)">${p.wins}</div><div class="pstat-label">Siege</div></div>
-        <div class="pstat"><div class="pstat-val" style="color:var(--error)">${p.losses}</div><div class="pstat-label">Niederl.</div></div>
+        <div class="pstat pstat-clickable" onclick="openMatchList('${p.id}','wins')" title="Siege anzeigen"><div class="pstat-val" style="color:var(--success)">${p.wins}</div><div class="pstat-label">Siege ›</div></div>
+        <div class="pstat pstat-clickable" onclick="openMatchList('${p.id}','losses')" title="Niederlagen anzeigen"><div class="pstat-val" style="color:var(--error)">${p.losses}</div><div class="pstat-label">Niederl. ›</div></div>
         <div class="pstat"><div class="pstat-val">${wr}%</div><div class="pstat-label">Quote</div></div>
       </div>
       ${p.matches>0?`
@@ -3110,7 +3346,7 @@ async function renderProfileView() {
 
   // ── Stale-while-revalidate: paint from cache instantly, update silently ──
   const _histCacheKey   = `pl_hist_${p.id}`;
-  const _matchCacheKey  = `pl_recent_${p.id}`;
+  const _matchCacheKey  = 'pl_global_recent';
 
   function _applyHistData(pts) {
     _eloHistMain = pts;
@@ -3126,21 +3362,19 @@ async function renderProfileView() {
       return;
     }
     matchEl.innerHTML = allMatches.map(m => {
-      const isW = m.winner_id === p.id;
-      const opp = byId(isW ? m.loser_id : m.winner_id);
+      const winner = byId(m.winner_id);
+      const loser  = byId(m.loser_id);
       const sets = (m.sets||[]).map(s=>`<span class="set-chip">${s.p1??'?'}:${s.p2??'?'}</span>`).join('');
-      const delta = isW
-        ? `+${m.elo_delta||0}`
-        : '-' + (m._isTm ? (m.elo_loss||0) : Math.abs((m.elo_loser_before||0)-(m.elo_loser_after||0)));
+      const delta = `+${m.elo_delta||0}`;
       const dt = fmtDateShort(m.played_at);
       const mb = m._isTm
         ? ` <span class="mode-badge">🏆 Turnier</span>`
         : (m.match_mode&&m.match_mode!=='classic'?` <span class="mode-badge">${MATCH_MODES[m.match_mode]?.label||m.match_mode}</span>`:'');
       return `<div style="display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--border)">
-        <span style="font-size:.85rem;font-weight:700;color:${isW?'var(--success)':'var(--error)'}">${isW?'✓':'✗'}</span>
-        <span style="flex:1;font-size:.88rem;font-weight:600">${opp?esc(opp.name):'?'}${mb}</span>
+        <span style="font-size:.85rem;font-weight:700;color:var(--success)">✓</span>
+        <span style="flex:1;font-size:.88rem;font-weight:600">${winner?esc(winner.name):'?'} – ${loser?esc(loser.name):'?'}${mb}</span>
         <div class="match-sets">${sets}</div>
-        <span style="font-size:.78rem;font-weight:700;color:${isW?'var(--success)':'var(--error)'};min-width:36px;text-align:right">${delta}</span>
+        <span style="font-size:.78rem;font-weight:700;color:var(--success);min-width:36px;text-align:right">${delta}</span>
         <span style="font-size:.72rem;color:var(--text-dim);min-width:52px;text-align:right">${dt}</span>
       </div>`;
     }).join('');
@@ -3160,30 +3394,33 @@ async function renderProfileView() {
   buildH2HSelects();
   renderStatsView();
 
-  // Fetch fresh data in background — chart + matches both update silently
+  // Fetch fresh data in background — chart + global recent matches both update silently
   const [histData, matchRes, tmMatchRes] = await Promise.all([
     loadPlayerEloHistory(p.id),
     withTimeout(
-      db.from('matches').select('*').or(`winner_id.eq.${p.id},loser_id.eq.${p.id}`).order('played_at',{ascending:false}).limit(10),
+      db.from('matches').select('id,winner_id,loser_id,sets,elo_delta,elo_loser_before,elo_loser_after,match_mode,played_at')
+        .eq('sport', S.sport)
+        .order('played_at',{ascending:false}).limit(5),
       10000, {data:null}
     ),
-    withTimeout(
-      db.from('tournament_matches')
-        .select('id,player1_id,player2_id,winner_id,score1,score2,elo_delta,elo_loss,completed_at')
-        .or(`player1_id.eq.${p.id},player2_id.eq.${p.id}`)
-        .not('winner_id','is',null)
-        .not('completed_at','is',null)
-        .order('completed_at',{ascending:false})
-        .limit(10),
-      10000, {data:null}
-    )
+    S.sport === 'tt'
+      ? withTimeout(
+          db.from('tournament_matches')
+            .select('id,player1_id,player2_id,winner_id,score1,score2,elo_delta,elo_loss,completed_at')
+            .not('winner_id','is',null)
+            .not('completed_at','is',null)
+            .order('completed_at',{ascending:false})
+            .limit(5),
+          10000, {data:null}
+        )
+      : Promise.resolve({data:[]})
   ]);
 
   // Silently update chart
   _applyHistData(histData);
   try { localStorage.setItem(_histCacheKey, JSON.stringify(histData)); } catch {}
 
-  // Merge + sort last 10 matches (regular + tournament), update silently
+  // Merge global last 5 (regular + tournament for TT), update silently
   const regMatches = (matchRes?.data || []).map(m => ({...m, _isTm:false}));
   const tmMatches  = (tmMatchRes?.data || []).map(m => ({
     _isTm: true,
@@ -3196,7 +3433,7 @@ async function renderProfileView() {
   }));
   const allMatches = [...regMatches, ...tmMatches]
     .sort((a,b) => new Date(b.played_at) - new Date(a.played_at))
-    .slice(0, 10);
+    .slice(0, 5);
   _applyMatchData(allMatches);
   try { localStorage.setItem(_matchCacheKey, JSON.stringify(allMatches)); } catch {}
 }
@@ -3206,7 +3443,8 @@ const OB = {
   step: 0,
   answers: [],
   pendingUser: null,  // {id, name, club}
-  mode: 'new'         // 'new' | 'recalculate'
+  mode: 'new',        // 'new' | 'recalculate'
+  sport: 'tt'         // 'tt' | 'padel'
 };
 
 const OB_QUESTIONS = [
@@ -3248,13 +3486,55 @@ const OB_QUESTIONS = [
   }
 ];
 
+const PADEL_OB_QUESTIONS = [
+  {
+    q: 'Wie lange spielst du schon Padel?',
+    opts: [
+      {e:'🆕', t:'Weniger als 1 Jahr',     d:'Ich fange gerade an',                     pts:0},
+      {e:'📅', t:'1–3 Jahre',              d:'Ich kenne die Grundlagen',                pts:120},
+      {e:'🎯', t:'3–6 Jahre',              d:'Ich habe ordentlich Court-Erfahrung',     pts:270},
+      {e:'🏆', t:'Mehr als 6 Jahre',       d:'Ich spiele schon sehr lange',             pts:420},
+    ]
+  },
+  {
+    q: 'Spielst du in einem Verein oder einer Liga?',
+    opts: [
+      {e:'🏠', t:'Nein, nur privat',       d:'Freizeit oder Hobbygruppe',               pts:0},
+      {e:'🤝', t:'Ja, Freizeitgruppe',     d:'Regelmäßige Runden ohne Tabelle',         pts:90},
+      {e:'🏟️', t:'Ja, Vereinsliga',        d:'Turnierspieler auf Vereinsniveau',        pts:250},
+      {e:'⭐', t:'Ja, höhere Liga',        d:'Professionelles oder nationales Niveau',  pts:450},
+    ]
+  },
+  {
+    q: 'Welche Schläge beherrschst du sicher?',
+    opts: [
+      {e:'🎾', t:'Grundschläge',           d:'Vorhand, Rückhand, Lob',                  pts:0},
+      {e:'🔄', t:'Volley & Bandeja',       d:'Ich spiele aktiv am Netz',                pts:90},
+      {e:'💥', t:'Vibora & Smash',         d:'Offensiv und unter Druck',                pts:200},
+      {e:'🚀', t:'Alle Schlagtechniken',   d:'Chiquita, Bajada, Globo — kein Problem',  pts:330},
+    ]
+  },
+  {
+    q: 'Wie schätzt du dein Padel-Level ein?',
+    opts: [
+      {e:'😊', t:'Einsteiger',             d:'Lerne noch und verliere oft',              pts:0},
+      {e:'💪', t:'Fortschritt',            d:'Halte regelmäßig mit',                    pts:90},
+      {e:'🔥', t:'Fortgeschritten',        d:'Gewinne die meisten Matches',             pts:200},
+      {e:'🏆', t:'Wettkampfspieler',       d:'Spiele in Turnieren und gewinne',         pts:330},
+    ]
+  }
+];
+
+function obQuestions() { return OB.sport === 'padel' ? PADEL_OB_QUESTIONS : OB_QUESTIONS; }
+
 function obCalcElo() {
-  const total = OB.answers.reduce((s, i, qi) => s + (OB_QUESTIONS[qi]?.opts[i]?.pts||0), 0);
+  const qs = obQuestions();
+  const total = OB.answers.reduce((s, i, qi) => s + (qs[qi]?.opts[i]?.pts||0), 0);
   return Math.min(1900, Math.max(900, 900 + total));
 }
 
 function obStart() {
-  OB.step = 0; OB.answers = []; OB.mode = 'new';
+  OB.step = 0; OB.answers = []; OB.mode = 'new'; OB.sport = 'tt';
   showPage('onboarding');
   obRender();
 }
@@ -3270,31 +3550,34 @@ function obStartRecalculate() {
 }
 
 function obRender() {
-  const total = OB_QUESTIONS.length;
+  const qs = obQuestions();
+  const total = qs.length;
   const isResult = OB.step >= total;
   const pct = isResult ? 100 : Math.round((OB.step + 1) / total * 100);
   $el('ob-fill').style.width = pct + '%';
   $el('ob-step-label').textContent = isResult ? 'Dein Level!' : `Frage ${OB.step+1} von ${total}`;
   $el('ob-pct-label').textContent = pct + '%';
   $el('ob-back-btn').style.display = OB.step > 0 ? '' : 'none';
+  const sportEmoji = OB.sport === 'padel' ? '🎾' : '🚀';
 
   if (isResult) {
     const elo = obCalcElo();
     const lvl = eloToLevel(elo);
     const color = levelColor(lvl);
     const label = levelLabel(lvl);
-    $el('ob-next-btn').textContent = OB.mode === 'recalculate' ? '✓ Elo übernehmen' : '🚀 Los geht\'s!';
+    const sportLabel = OB.sport === 'padel' ? 'Padel-Level' : 'Level';
+    $el('ob-next-btn').textContent = OB.mode === 'recalculate' ? '✓ Elo übernehmen' : `${sportEmoji} Los geht's!`;
     $el('ob-next-btn').disabled = false;
     $el('ob-content').innerHTML = `
       <div class="ob-card ob-result">
-        <div style="font-size:.9rem;color:var(--text-muted);margin-bottom:.5rem">${OB.mode === 'recalculate' ? 'Dein neues Level' : 'Dein Start-Level'}</div>
+        <div style="font-size:.9rem;color:var(--text-muted);margin-bottom:.5rem">${OB.mode === 'recalculate' ? `Dein neues ${sportLabel}` : `Dein Start-${sportLabel}`}</div>
         <div class="ob-result-level" style="color:${color}">${lvl.toFixed(1)}</div>
         <div class="ob-result-badge" style="background:${color}22;color:${color}">${label}</div>
-        <div class="ob-result-desc">Basierend auf deinen Antworten ${OB.mode === 'recalculate' ? 'wird dein Level auf' : 'starten wir dich bei'} ${lvl.toFixed(1)} ${OB.mode === 'recalculate' ? 'gesetzt' : 'gesetzt'}.<br>Dein Level ändert sich mit jedem Match automatisch.</div>
+        <div class="ob-result-desc">Basierend auf deinen Antworten ${OB.mode === 'recalculate' ? 'wird dein Level auf' : 'starten wir dich bei'} ${lvl.toFixed(1)} gesetzt.<br>Dein Level ändert sich mit jedem Match automatisch.</div>
         <div class="ob-result-elo">${OB.mode === 'recalculate' ? 'Neuer' : 'Start-'}Elo: ${elo}</div>
       </div>`;
   } else {
-    const q = OB_QUESTIONS[OB.step];
+    const q = qs[OB.step];
     $el('ob-next-btn').textContent = OB.step === total - 1 ? 'Mein Level sehen →' : 'Weiter →';
     $el('ob-next-btn').disabled = OB.answers[OB.step] === undefined;
     $el('ob-content').innerHTML = `
@@ -3321,7 +3604,7 @@ function obSelect(i) {
 }
 
 function obNext() {
-  if (OB.step >= OB_QUESTIONS.length) { obFinish(); return; }
+  if (OB.step >= obQuestions().length) { obFinish(); return; }
   if (OB.answers[OB.step] === undefined) return;
   OB.step++;
   obRender();
@@ -3362,7 +3645,7 @@ async function obFinish() {
   btn.innerHTML = '<span class="spinner"></span> Einrichten…';
   const elo = obCalcElo();
   const {id, name, club, email} = OB.pendingUser;
-  const {error} = await db.from('players').insert({user_id:id, name, club, email: email||null, elo, matches:0, wins:0, losses:0, is_admin:false});
+  const {error} = await db.from('players').insert({user_id:id, name, club, email: email||null, elo, matches:0, wins:0, losses:0, is_admin:false, sport: OB.sport||'tt'});
   if (error) {
     // Unique violation = player already exists (e.g. from a previous session) → just proceed
     if (error.code === '23505') { console.warn('Player already exists, skipping insert.'); }
@@ -3374,7 +3657,20 @@ async function obFinish() {
       return;
     }
   }
-  // Player created — load the app
+  // Player created — reload app in the correct sport context
+  if (OB.sport === 'padel') {
+    // Already in the app as a TT user — just reload the padel context
+    showPage('app');
+    S.sport = 'padel';
+    updateSportBar();
+    await loadPlayers();
+    const newPd = S.players.find(p => p.user_id === S.user?.id) || null;
+    applyPlayerData(newPd, S.user);
+    renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
+    showView('profile'); renderProfileView();
+    toast('🎾 Padel-Profil erstellt!', 'success');
+    return;
+  }
   _initialized = false;
   const {data} = await withTimeout(db.auth.getSession(), 4000, {data:{session:null}});
   if (data?.session?.user) {
@@ -3418,8 +3714,10 @@ function init() {
     if (cachedPlayers?.length && myId) {
       const myPlayer = cachedPlayers.find(p => p.id === myId);
       if (myPlayer) {
-        S.players = cachedPlayers;
+        S.sport   = myPlayer.sport || 'tt';
+        S.players = cachedPlayers.filter(p => (p.sport||'tt') === S.sport);
         S.player  = myPlayer;
+        S._ttPlayer = S.sport === 'tt' ? myPlayer : null;
         S.isAdmin = myPlayer.is_admin || false;
         // Also restore leagues from cache so tabs appear instantly
         const cachedLeagues = getCachedLeagues();
@@ -3435,6 +3733,7 @@ function init() {
         // Settings from cache
         const cachedSet = getCachedSettings();
         if (cachedSet) { S.settings = {k_high:cachedSet.k_high||32,k_low:cachedSet.k_low||16}; }
+        updateSportBar();
         renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
         renderLeagueTabs();
         updateChallengeBadge();
