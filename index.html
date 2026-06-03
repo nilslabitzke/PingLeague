@@ -524,8 +524,20 @@
       <div class="match-form">
         <div class="card">
           <div class="card-title">Spieler</div>
-          <div class="form-group"><label>Spieler 1</label><select id="m-p1" onchange="onPlayerChange()"></select></div>
-          <div class="form-group"><label>Spieler 2 (Gegner)</label><select id="m-p2" onchange="onPlayerChange()"><option value="">— Gegner auswählen —</option></select></div>
+          <!-- TT singles -->
+          <div id="singles-players">
+            <div class="form-group"><label>Spieler 1</label><select id="m-p1" onchange="onPlayerChange()"></select></div>
+            <div class="form-group"><label>Spieler 2 (Gegner)</label><select id="m-p2" onchange="onPlayerChange()"><option value="">— Gegner auswählen —</option></select></div>
+          </div>
+          <!-- Padel doubles (hidden for TT) -->
+          <div id="doubles-players" style="display:none">
+            <div style="font-size:.75rem;font-weight:800;color:var(--success);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.45rem">🟢 Team A</div>
+            <div class="form-group"><label>Spieler 1</label><select id="m-da1" onchange="onDoublesChange()"></select></div>
+            <div class="form-group"><label>Spieler 2</label><select id="m-da2" onchange="onDoublesChange()"><option value="">— Mitspieler wählen —</option></select></div>
+            <div style="font-size:.75rem;font-weight:800;color:var(--error);text-transform:uppercase;letter-spacing:.06em;margin:.75rem 0 .45rem">🔴 Team B</div>
+            <div class="form-group"><label>Spieler 1</label><select id="m-db1" onchange="onDoublesChange()"><option value="">— Spieler wählen —</option></select></div>
+            <div class="form-group"><label>Spieler 2</label><select id="m-db2" onchange="onDoublesChange()"><option value="">— Spieler wählen —</option></select></div>
+          </div>
         </div>
         <div class="card" style="padding:1rem 1.25rem">
           <div class="card-title" style="margin-bottom:.75rem">Modus</div>
@@ -552,6 +564,8 @@
             <div class="elo-tile"><div class="elo-tile-label">Niederlage S1</div><div class="elo-tile-val neg" id="ep-loss-val">−0</div><div class="elo-tile-sub" id="ep-loss-tot">→ 1200</div></div>
           </div>
         </div>
+        <!-- Padel doubles Elo preview (populated by JS) -->
+        <div class="card" id="doubles-elo-preview" style="display:none"></div>
         <div class="card">
           <div class="card-title">Sätze</div>
           <div id="match-alert"></div>
@@ -1782,7 +1796,7 @@ async function openProfile(playerId) {
   const [histData, matchData, tmMatchData] = await Promise.all([
     loadPlayerEloHistory(playerId),
     withTimeout(
-      db.from('matches').select('*').eq('sport',S.sport).or(`winner_id.eq.${playerId},loser_id.eq.${playerId}`).order('played_at',{ascending:false}).limit(10),
+      db.from('matches').select('*').eq('sport',S.sport).or(`winner_id.eq.${playerId},winner2_id.eq.${playerId},loser_id.eq.${playerId},loser2_id.eq.${playerId}`).order('played_at',{ascending:false}).limit(10),
       10000, {data:null}
     ),
     withTimeout(
@@ -1817,15 +1831,27 @@ async function openProfile(playerId) {
     $el('profile-matches').innerHTML='<div class="text-muted" style="font-size:.85rem">Noch keine Matches.</div>';
   } else {
     $el('profile-matches').innerHTML=allM.map(m=>{
-      const isW=m.winner_id===playerId;
-      const opp=byId(isW?m.loser_id:m.winner_id);
+      const isDoubles = !!m.winner2_id;
+      const isW = m.winner_id===playerId || m.winner2_id===playerId;
       const sets=(m.sets||[]).map(s=>`<span class="set-chip">${s.p1??'?'}:${s.p2??'?'}</span>`).join('');
       const delta=isW?`+${m.elo_delta||0}`:'-'+(m._isTm?(m.elo_loss||0):Math.abs((m.elo_loser_before||0)-(m.elo_loser_after||0)));
       const mb=m._isTm?` <span class="mode-badge">🏆 Turnier</span>`:
         (m.match_mode&&m.match_mode!=='classic'?` <span class="mode-badge">${MATCH_MODES[m.match_mode]?.label||m.match_mode}</span>`:'');
+      let oppText;
+      if (isDoubles) {
+        // Show "partner & me vs opp1 & opp2" — find partner and both opponents
+        const partnerId  = isW ? (m.winner_id===playerId ? m.winner2_id : m.winner_id) : (m.loser_id===playerId ? m.loser2_id : m.loser_id);
+        const opp1Id     = isW ? m.loser_id  : m.winner_id;
+        const opp2Id     = isW ? m.loser2_id : m.winner2_id;
+        const partner    = byId(partnerId), opp1=byId(opp1Id), opp2=byId(opp2Id);
+        oppText = `<span style="color:var(--text-muted);font-size:.78rem">m. ${partner?esc(partner.name):'?'}</span> vs ${opp1?esc(opp1.name):'?'} & ${opp2?esc(opp2.name):'?'}`;
+      } else {
+        const opp=byId(isW?m.loser_id:m.winner_id);
+        oppText = opp?esc(opp.name):'?';
+      }
       return `<div style="display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--border)">
         <span style="font-size:.85rem;font-weight:700;color:${isW?'var(--success)':'var(--error)'}">${isW?'S':'N'}</span>
-        <span style="flex:1;font-size:.88rem">${opp?esc(opp.name):'?'}${mb}</span>
+        <span style="flex:1;font-size:.88rem">${oppText}${mb}</span>
         <div class="match-sets">${sets}</div>
         <span style="font-size:.78rem;font-weight:700;color:${isW?'var(--success)':'var(--error)'}">${delta}</span>
       </div>`;
@@ -2110,20 +2136,108 @@ async function loadH2HStats() {
 // ── MATCH FORM ────────────────────────────────────────────────────────────
 function buildMatchSelects() {
   const p1=$el('m-p1'), p2=$el('m-p2');
-  if (S.isAdmin) {
-    p1.disabled=false;
-    p1.innerHTML=S.players.map(p=>`<option value="${p.id}" ${p.id===S.player?.id?'selected':''}>${esc(p.name)}</option>`).join('');
-  } else {
-    p1.disabled=true;
-    p1.innerHTML=S.player?`<option value="${S.player.id}">${esc(S.player.name)}</option>`:'<option>—</option>';
+  if (p1 && p2) {
+    if (S.isAdmin) {
+      p1.disabled=false;
+      p1.innerHTML=S.players.map(p=>`<option value="${p.id}" ${p.id===S.player?.id?'selected':''}>${esc(p.name)}</option>`).join('');
+    } else {
+      p1.disabled=true;
+      p1.innerHTML=S.player?`<option value="${S.player.id}">${esc(S.player.name)}</option>`:'<option>—</option>';
+    }
+    refreshP2();
   }
-  refreshP2();
+  // Also populate doubles selects if padel
+  if (S.sport === 'padel') buildDoublesSelects();
 }
 function refreshP2() {
   const p1id=$el('m-p1').value, p2=$el('m-p2'), prev=p2.value;
   p2.innerHTML='<option value="">— Gegner auswählen —</option>'+S.players.filter(p=>p.id!==p1id).map(p=>`<option value="${p.id}" ${p.id===prev?'selected':''}>${esc(p.name)}${fmtClub(p)?` (${esc(fmtClub(p))})`:''}</option>`).join('');
 }
 function onPlayerChange() { refreshP2(); updateEloPreview(); }
+
+// ── PADEL DOUBLES SELECTS ─────────────────────────────────────────────────
+function buildDoublesSelects() {
+  const da1 = $el('m-da1');
+  if (!da1) return;
+  // Team A player 1: own player (locked for non-admins) or free choice for admin
+  if (S.isAdmin) {
+    da1.disabled = false;
+    da1.innerHTML = S.players.map(p => `<option value="${p.id}" ${p.id===S.player?.id?'selected':''}>${esc(p.name)}</option>`).join('');
+  } else {
+    da1.disabled = true;
+    da1.innerHTML = S.player ? `<option value="${S.player.id}">${esc(S.player.name)}</option>` : '<option value="">—</option>';
+  }
+  refreshDoublesSelects();
+}
+
+function refreshDoublesSelects() {
+  const a1id = $el('m-da1')?.value || '';
+  const da2 = $el('m-da2'), db1 = $el('m-db1'), db2 = $el('m-db2');
+  if (!da2 || !db1 || !db2) return;
+  const a2id = da2.value, b1id = db1.value, b2id = db2.value;
+
+  const optsFor = (excludeIds) =>
+    '<option value="">— Spieler wählen —</option>' +
+    S.players
+      .filter(p => !excludeIds.includes(p.id))
+      .map(p => `<option value="${p.id}">${esc(p.name)}${fmtClub(p) ? ` (${esc(fmtClub(p))})` : ''}</option>`)
+      .join('');
+
+  da2.innerHTML = optsFor([a1id, b1id, b2id].filter(Boolean)); da2.value = a2id;
+  db1.innerHTML = optsFor([a1id, a2id, b2id].filter(Boolean)); db1.value = b1id;
+  db2.innerHTML = optsFor([a1id, a2id, b1id].filter(Boolean)); db2.value = b2id;
+}
+
+function onDoublesChange() {
+  refreshDoublesSelects();
+  updateDoublesEloPreview();
+}
+
+function updateDoublesEloPreview() {
+  const a1 = byId($el('m-da1')?.value), a2 = byId($el('m-da2')?.value);
+  const b1 = byId($el('m-db1')?.value), b2 = byId($el('m-db2')?.value);
+  const card = $el('doubles-elo-preview');
+  if (!card) return;
+  if (!a1 || !a2 || !b1 || !b2) { card.style.display = 'none'; return; }
+
+  const teamAElo = Math.round((a1.elo + a2.elo) / 2);
+  const teamBElo = Math.round((b1.elo + b2.elo) / 2);
+  const teamAM   = Math.floor((a1.matches + a2.matches) / 2);
+  const teamBM   = Math.floor((b1.matches + b2.matches) / 2);
+  const eloRaw   = calcElo(teamAElo, teamBElo, teamAM, teamBM);
+  const factor   = MATCH_MODES[_matchMode]?.eloFactor ?? 1;
+  const elo      = applyEloFactor(eloRaw, teamAElo, teamBElo, factor);
+  const pct      = Math.round(expected(teamAElo, teamBElo) * 100);
+
+  card.style.display = 'block';
+  card.innerHTML = `
+    <div class="card-title">Elo-Vorschau (Doppel)</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.3rem">
+      <span style="font-size:.82rem;font-weight:700;color:var(--success)">🟢 ${esc(a1.name)} &amp; ${esc(a2.name)}</span>
+      <span style="font-size:.72rem;color:var(--text-muted)">${teamAElo} Ø-Elo</span>
+    </div>
+    <div class="win-bar-wrap" style="margin-bottom:.3rem">
+      <div class="win-bar-labels"><span>${esc(a1.name)}</span><span>${esc(b1.name)}</span></div>
+      <div class="win-bar"><div class="win-bar-fill" style="width:${pct}%"></div></div>
+      <div class="win-pct">${pct}% Siegchance für Team A</div>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem">
+      <span style="font-size:.82rem;font-weight:700;color:var(--error)">🔴 ${esc(b1.name)} &amp; ${esc(b2.name)}</span>
+      <span style="font-size:.72rem;color:var(--text-muted)">${teamBElo} Ø-Elo</span>
+    </div>
+    <div class="elo-grid">
+      <div class="elo-tile">
+        <div class="elo-tile-label">Sieg Team A</div>
+        <div class="elo-tile-val pos">+${elo.gain}</div>
+        <div class="elo-tile-sub">pro Spieler</div>
+      </div>
+      <div class="elo-tile">
+        <div class="elo-tile-label">Niederlage Team A</div>
+        <div class="elo-tile-val neg">−${elo.loss}</div>
+        <div class="elo-tile-sub">pro Spieler</div>
+      </div>
+    </div>`;
+}
 
 function updateEloPreview() {
   const p1=byId($el('m-p1').value), p2=byId($el('m-p2').value), card=$el('elo-preview');
@@ -2231,6 +2345,8 @@ function renderMatchPreview(v,w1,w2,need3) {
 }
 
 async function submitMatch() {
+  // Padel is always doubles — route to dedicated function
+  if (S.sport === 'padel') { await submitDoublesMatch(); return; }
   const p1id=$el('m-p1').value, p2id=$el('m-p2').value, alEl=$el('match-alert');
   alEl.innerHTML='';
   if (!p1id||!p2id) { alEl.innerHTML='<div class="alert alert-error">Bitte beide Spieler auswählen.</div>'; return; }
@@ -2306,6 +2422,85 @@ async function submitMatch() {
   btn.disabled=false; btn.innerHTML='Match eintragen';
 }
 
+// ── PADEL DOUBLES MATCH SUBMISSION ────────────────────────────────────────
+async function submitDoublesMatch() {
+  const a1id=$el('m-da1')?.value, a2id=$el('m-da2')?.value;
+  const b1id=$el('m-db1')?.value, b2id=$el('m-db2')?.value;
+  const alEl=$el('match-alert');
+  alEl.innerHTML='';
+
+  if (!a1id||!a2id||!b1id||!b2id) {
+    alEl.innerHTML='<div class="alert alert-error">Bitte alle 4 Spieler auswählen.</div>'; return;
+  }
+  if (new Set([a1id,a2id,b1id,b2id]).size < 4) {
+    alEl.innerHTML='<div class="alert alert-error">Jeder Spieler darf nur einmal vorkommen.</div>'; return;
+  }
+
+  // ── Parse sets (same logic as singles, padel modes only) ────────────────
+  let sets=[], as=0, bs=0;
+  if (_matchMode==='padel_express') {
+    const a=$el('s1a').value, b=$el('s1b').value;
+    if (!validSet(a,b)) { alEl.innerHTML='<div class="alert alert-error">Bitte gültigen Satz eintragen.</div>'; return; }
+    sets=[{p1:Number(a),p2:Number(b)}];
+    setWinner(a,b)===1 ? as++ : bs++;
+  } else {
+    // padel_standard: best of 3
+    const sa=[$el('s1a').value,$el('s2a').value], sb=[$el('s1b').value,$el('s2b').value];
+    if (!validSet(sa[0],sb[0])||!validSet(sa[1],sb[1])) {
+      alEl.innerHTML='<div class="alert alert-error">Bitte gültige Sätze 1 und 2 eintragen.</div>'; return;
+    }
+    const w1=setWinner(sa[0],sb[0]), w2=setWinner(sa[1],sb[1]);
+    sets=[{p1:Number(sa[0]),p2:Number(sb[0])},{p1:Number(sa[1]),p2:Number(sb[1])}];
+    as=(w1===1?1:0)+(w2===1?1:0); bs=(w1===2?1:0)+(w2===2?1:0);
+    if (w1!==w2) {
+      const s3a=$el('s3a').value, s3b=$el('s3b').value;
+      if (!validSet(s3a,s3b)) { alEl.innerHTML='<div class="alert alert-error">Steht 1:1 — bitte Satz 3 eintragen.</div>'; return; }
+      sets.push({p1:Number(s3a),p2:Number(s3b)});
+      setWinner(s3a,s3b)===1 ? as++ : bs++;
+    }
+  }
+
+  const a1=byId(a1id),a2=byId(a2id),b1=byId(b1id),b2=byId(b2id);
+  if (!a1||!a2||!b1||!b2) { alEl.innerHTML='<div class="alert alert-error">Spieler nicht gefunden.</div>'; return; }
+
+  // ── Elo: use average team Elo, same delta for all 4 players ─────────────
+  const teamAWon = as > bs;
+  const [w1p,w2p,l1p,l2p] = teamAWon ? [a1,a2,b1,b2] : [b1,b2,a1,a2];
+  const teamWElo = Math.round((w1p.elo+w2p.elo)/2);
+  const teamLElo = Math.round((l1p.elo+l2p.elo)/2);
+  const teamWM   = Math.floor((w1p.matches+w2p.matches)/2);
+  const teamLM   = Math.floor((l1p.matches+l2p.matches)/2);
+  const eloRaw   = calcElo(teamWElo, teamLElo, teamWM, teamLM);
+  const factor   = MATCH_MODES[_matchMode]?.eloFactor ?? 1;
+  const elo      = applyEloFactor(eloRaw, teamWElo, teamLElo, factor);
+
+  const btn=$el('btn-submit-match'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span> Speichern…';
+  try {
+    const {error} = await db.rpc('submit_doubles_match', {
+      p_winner1_id: w1p.id, p_winner2_id: w2p.id,
+      p_loser1_id:  l1p.id, p_loser2_id:  l2p.id,
+      p_sets: sets,
+      p_elo_w1_before: w1p.elo, p_elo_w1_after: Math.max(ELO_MIN, w1p.elo+elo.gain),
+      p_elo_w2_before: w2p.elo, p_elo_w2_after: Math.max(ELO_MIN, w2p.elo+elo.gain),
+      p_elo_l1_before: l1p.elo, p_elo_l1_after: Math.max(ELO_MIN, l1p.elo-elo.loss),
+      p_elo_l2_before: l2p.elo, p_elo_l2_after: Math.max(ELO_MIN, l2p.elo-elo.loss),
+      p_elo_delta: elo.gain,
+      p_match_mode: _matchMode,
+      p_sport: S.sport
+    });
+    if (error) throw error;
+    clearMatchForm();
+    toast(`✓ ${esc(w1p.name)} & ${esc(w2p.name)} gewinnen +${elo.gain} Elo`, 'success');
+    await loadPlayers(); renderRanking(); buildMatchSelects();
+    if (S.player) S.player = byId(S.player.id) || S.player;
+    if ($el('view-profile').classList.contains('active')) renderProfileView();
+  } catch(err) {
+    console.error(err);
+    alEl.innerHTML=`<div class="alert alert-error">Fehler: ${err.message}</div>`;
+  }
+  btn.disabled=false; btn.innerHTML='Match eintragen';
+}
+
 function clearMatchForm() {
   ['s1a','s1b','s2a','s2b','s3a','s3b','s4a','s4b','s5a','s5b'].forEach(id=>$el(id).value='');
   ['s1-tag','s2-tag','s3-tag','s4-tag','s5-tag'].forEach(id=>{$el(id).textContent='';$el(id).className='set-tag';});
@@ -2315,6 +2510,9 @@ function clearMatchForm() {
   $el('set4-row').style.display='none'; $el('set5-row').style.display='none';
   $el('match-result-preview').innerHTML='';
   $el('m-p2').value=''; $el('elo-preview').style.display='none';
+  // Reset doubles selects too
+  ['m-da2','m-db1','m-db2'].forEach(id => { const el=$el(id); if(el) el.value=''; });
+  const dep=$el('doubles-elo-preview'); if(dep) dep.style.display='none';
 }
 
 // ── HISTORY ───────────────────────────────────────────────────────────────
@@ -2328,7 +2526,7 @@ async function loadHistory() {
 
   // Fetch regular matches (+ tournament matches for TT only) in parallel
   let qReg = db.from('matches').select('*').eq('sport',S.sport).order('played_at',{ascending:false}).limit(60);
-  if (filt) qReg = qReg.or(`winner_id.eq.${filt},loser_id.eq.${filt}`);
+  if (filt) qReg = qReg.or(`winner_id.eq.${filt},winner2_id.eq.${filt},loser_id.eq.${filt},loser2_id.eq.${filt}`);
 
   // Tournaments are TT-only for now
   let tmPromise = Promise.resolve({data:[], error:null});
@@ -2374,7 +2572,15 @@ async function loadHistory() {
   if (!all.length) { el.innerHTML='<div class="empty-state"><div class="empty-icon">🏓</div><p>Noch keine Matches.</p></div>'; return; }
 
   el.innerHTML = all.map(m => {
+    const isDoubles = !!m.winner2_id;
     const wP=byId(m.winner_id), lP=byId(m.loser_id);
+    const wP2=isDoubles?byId(m.winner2_id):null, lP2=isDoubles?byId(m.loser2_id):null;
+    const wName = isDoubles
+      ? `${wP?esc(wP.name):'?'} &amp; ${wP2?esc(wP2.name):'?'}`
+      : (wP?esc(wP.name):'?');
+    const lName = isDoubles
+      ? `${lP?esc(lP.name):'?'} &amp; ${lP2?esc(lP2.name):'?'}`
+      : (lP?esc(lP.name):'?');
     const sets=(m.sets||[]).map(s=>`<span class="set-chip">${s.p1??'?'}:${s.p2??'?'}</span>`).join('');
     const lLoss = m._isTm ? (m.elo_loss||0) : (m.elo_loser_before!=null&&m.elo_loser_after!=null ? Math.abs(m.elo_loser_before-m.elo_loser_after) : m.elo_delta||0);
     const modeBadge = m._isTm
@@ -2384,9 +2590,9 @@ async function loadHistory() {
       ? `<button onclick="openReportModal('${m.id}')" style="margin-top:.25rem;background:none;border:none;color:var(--text-dim);font-size:.7rem;cursor:pointer;padding:.1rem .3rem;border-radius:3px" title="Falsches Ergebnis melden" onmouseover="this.style.color='var(--error)'" onmouseout="this.style.color='var(--text-dim)'">🚩 Melden</button>`
       : '';
     return `<div class="match-card">
-      <div><div class="match-player winner">${wP?esc(wP.name):'?'}</div><div class="match-elo pos">+${m.elo_delta||0} Elo</div></div>
+      <div><div class="match-player winner">${wName}</div><div class="match-elo pos">+${m.elo_delta||0} Elo</div></div>
       <div class="match-center"><div class="match-sets">${sets}${modeBadge}</div><div class="match-date">${fmtDate(m.played_at)}</div>${reportBtn}</div>
-      <div class="match-right"><div class="match-player loser">${lP?esc(lP.name):'?'}</div><div class="match-elo neg">−${lLoss} Elo</div></div>
+      <div class="match-right"><div class="match-player loser">${lName}</div><div class="match-elo neg">−${lLoss} Elo</div></div>
     </div>`;
   }).join('');
 }
@@ -3084,11 +3290,18 @@ function toggleRankingHistory() {
 // ── SPORT SWITCHER ────────────────────────────────────────────────────────
 function updateSportBar() {
   ['tt','padel'].forEach(s => $el(`sport-btn-${s}`)?.classList.toggle('active', s === S.sport));
-  // Match form: show sport-appropriate mode buttons
+  // Match form: show sport-appropriate mode buttons + singles vs doubles player selects
   const isTT = S.sport === 'tt';
   const ttEl = $el('tt-modes'), padEl = $el('padel-modes');
   if (ttEl) ttEl.style.display = isTT ? 'flex' : 'none';
   if (padEl) padEl.style.display = isTT ? 'none' : 'flex';
+  const singlesEl = $el('singles-players'), doublesEl = $el('doubles-players');
+  if (singlesEl) singlesEl.style.display = isTT ? '' : 'none';
+  if (doublesEl) doublesEl.style.display = isTT ? 'none' : '';
+  // Reset previews when switching sport
+  const epEl = $el('elo-preview'), depEl = $el('doubles-elo-preview');
+  if (epEl) epEl.style.display = 'none';
+  if (depEl) depEl.style.display = 'none';
 }
 
 async function setSport(sport) {
