@@ -3093,43 +3093,49 @@ function updateSportBar() {
 
 async function setSport(sport) {
   if (S.sport === sport) return;
-  // Remember TT player for name re-use when creating padel profile
-  if (S.sport === 'tt') S._ttPlayer = S.player;
-  S.sport = sport;
-  S.currentLeague = ''; // reset league filter (leagues are sport-specific)
-  // Clear only the match-history cache (sport-specific); player cache is keyed per-sport so no clear needed
-  try { localStorage.removeItem(`pl_global_recent_${S.sport}`); } catch {}
-  updateSportBar();
-  // Switch default match mode
-  if (sport === 'padel') {
-    _matchMode = 'padel_standard';
-    selectMatchMode('padel_standard');
-  } else {
-    _matchMode = 'classic';
-    selectMatchMode('classic');
-  }
-  // ── Instant feedback: paint from sport-specific cache if available ──────
-  const cachedNow = getCachedPlayers(); // key is now 'pl_v1_padel' or 'pl_v1_tt'
-  if (cachedNow) {
-    S.players = cachedNow;
-    const uid = S.user?.id || S.player?.user_id;
-    const pd = uid ? (S.players.find(p => p.user_id === uid) || null) : null;
-    applyPlayerData(pd, S.user);
+  try {
+    // Remember TT player for name re-use when creating padel profile
+    if (S.sport === 'tt') S._ttPlayer = S.player;
+    S.sport = sport;
+    S.currentLeague = '';
+    // Clear sport-specific match-history cache; player cache is keyed per-sport so stays intact
+    try { localStorage.removeItem(`pl_global_recent_${S.sport}`); } catch {}
+    updateSportBar();
+    if (sport === 'padel') {
+      _matchMode = 'padel_standard';
+      selectMatchMode('padel_standard');
+    } else {
+      _matchMode = 'classic';
+      selectMatchMode('classic');
+    }
+
+    // ── Try instant paint from sport-specific cache ───────────────────────
+    const cachedNow = getCachedPlayers();
+    if (cachedNow) {
+      S.players = cachedNow;
+      const uid = S.user?.id || S.player?.user_id;
+      const pd = uid ? (S.players.find(p => p.user_id === uid) || null) : null;
+      applyPlayerData(pd, S.user);
+      renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
+      showView('profile'); // renders correctly from cache immediately
+    } else {
+      // No cache: show profile view in current state while we fetch
+      // (renderProfileView handles null player gracefully — shows "Padel-Profil erstellen" etc.)
+      S.player = null;
+      applyPlayerData(null, S.user);
+      showView('profile');
+    }
+
+    // Always fetch fresh data from DB (happens in background if cache was hit)
+    await loadPlayers();
+    const uid2 = S.user?.id || S._ttPlayer?.user_id;
+    const pd2  = uid2 ? (S.players.find(p => p.user_id === uid2) || null) : null;
+    applyPlayerData(pd2, S.user);
     renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
     showView('profile');
-  } else {
-    // No cache yet: navigate instantly, show a spinner while data loads
-    showView('profile');
-    const container = $el('profile-view-content');
-    if (container) container.innerHTML = '<div style="text-align:center;padding:3rem 1rem;color:var(--text-muted)"><div class="spinner" style="width:2rem;height:2rem;margin:0 auto .75rem"></div><div style="font-size:.9rem">Lade…</div></div>';
+  } catch(e) {
+    console.error('setSport error:', e);
   }
-  // Always refresh from DB in the background
-  await loadPlayers();
-  const uid = S.user?.id || S.player?.user_id;
-  const pd = uid ? (S.players.find(p => p.user_id === uid) || null) : null;
-  applyPlayerData(pd, S.user);
-  renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
-  showView('profile');
 }
 
 function registerForPadel() {
@@ -3747,7 +3753,9 @@ function init() {
 
   // ── Instant startup from cache (removes "Starte PingLeague…" for returning users) ──
   try {
-    const cachedPlayers = getCachedPlayers();
+    // Try sport-specific cache first, fall back to old 'pl_v1' key for one-time migration
+    const cachedPlayers = getCachedPlayers()
+      || (() => { try { const c=JSON.parse(localStorage.getItem('pl_v1')||'null'); return c?.data||null; } catch(e){return null;} })();
     const myId = localStorage.getItem(MY_PLAYER_KEY);
     if (cachedPlayers?.length && myId) {
       const myPlayer = cachedPlayers.find(p => p.id === myId);
