@@ -3648,7 +3648,7 @@ async function obFinish() {
   if (OB.mode === 'recalculate') {
     btn.innerHTML = '<span class="spinner"></span> Aktualisieren…';
     const elo = obCalcElo();
-    const { error } = await db.rpc('reset_own_elo', { p_elo: elo });
+    const { error } = await db.rpc('reset_own_elo', { p_elo: elo, p_sport: OB.sport || S.sport || 'tt' });
     if (error) {
       btn.disabled = false; btn.textContent = "🚀 Los geht's!";
       document.getElementById('ob-content').insertAdjacentHTML('beforeend',
