@@ -1540,18 +1540,43 @@ async function setupUser(user) {
     }).catch(console.error);
 
   // ── STEP 2: Fresh data from DB ────────────────────────────────────────
-  const playersLoaded = await loadPlayers(); // saves to cache internally
-  if (_setupSession !== mySession) return; // user logged out while we were loading
+  // IMPORTANT: always check for a TT player first, regardless of current sport.
+  // onAuthStateChange fires on token refresh too — if the user had switched to
+  // padel context we must NOT trigger onboarding just because there are no
+  // padel players yet. Fetch TT players specifically for the existence check.
+  const {data: ttData} = await withTimeout(
+    db.from('players').select('*').eq('sport','tt').order('elo',{ascending:false}),
+    15000, {data: null}
+  );
+  if (_setupSession !== mySession) return;
 
-  const pd = S.players.find(p => p.user_id === user.id) || null;
+  const ttPlayers = ttData || [];
+  const ttPd = ttPlayers.find(p => p.user_id === user.id) || null;
 
-  if (playersLoaded && !pd) {
+  if (ttData && !ttPd) {
+    // Truly a new user — no TT profile exists at all
     OB.pendingUser = {id: user.id, name: user.email.split('@')[0], club: null, email: user.email};
+    OB.sport = 'tt';
     obStart(); return;
   }
 
+  // User has a TT profile. Now load players for whichever sport is currently active.
+  if (S.sport === 'tt') {
+    S.players = ttPlayers;
+    setCachedPlayers(S.players);
+    updateLastUpdated();
+  } else {
+    await loadPlayers(); // load padel players for current sport
+    if (_setupSession !== mySession) return;
+  }
+
+  // The active player record (may be null if no padel profile yet — that's OK)
+  const pd = S.sport === 'tt'
+    ? ttPd
+    : (S.players.find(p => p.user_id === user.id) || null);
+
   applyPlayerData(pd, user);
-  S._ttPlayer = pd; // remember TT player for later padel profile creation
+  S._ttPlayer = ttPd; // always keep TT player reference for padel profile creation
   updateSportBar();
   renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
   loadChallenges();      // load badge in background
