@@ -1000,20 +1000,21 @@ function withTimeout(promise, ms, fallback) {
   return Promise.race([promise, new Promise(r => setTimeout(() => r(fallback), ms))]);
 }
 // ── PLAYER CACHE (localStorage) ───────────────────────────────────────────
-const PL_CACHE        = 'pl_v1';
 const PL_LEAGUES_CACHE     = 'pl_leagues_v1';
 const PL_CHALLENGES_CACHE  = 'pl_challenges_v1';
 const PL_TOURNAMENTS_CACHE = 'pl_tournaments_v1';
 const PL_SETTINGS_CACHE    = 'pl_settings_v1';
 const AUTO_REFRESH_MS = 2 * 60 * 1000; // 2 minutes — always fresh on reload + tab-switch
+// Sport-specific cache keys so switching TT↔Padel doesn't blow away the other sport's cache
+function _playerCacheKey() { return 'pl_v1_' + (S?.sport || 'tt'); }
 function getCachedPlayers() {
-  try { const c=JSON.parse(localStorage.getItem(PL_CACHE)||'null'); return c?.data||null; } catch(e){return null;}
+  try { const c=JSON.parse(localStorage.getItem(_playerCacheKey())||'null'); return c?.data||null; } catch(e){return null;}
 }
 function getCachedTs() {
-  try { const c=JSON.parse(localStorage.getItem(PL_CACHE)||'null'); return c?.ts||null; } catch(e){return null;}
+  try { const c=JSON.parse(localStorage.getItem(_playerCacheKey())||'null'); return c?.ts||null; } catch(e){return null;}
 }
 function setCachedPlayers(data) {
-  try { localStorage.setItem(PL_CACHE, JSON.stringify({data, ts:Date.now()})); } catch(e){}
+  try { localStorage.setItem(_playerCacheKey(), JSON.stringify({data, ts:Date.now()})); } catch(e){}
 }
 function getCachedLeagues() {
   try { const c=JSON.parse(localStorage.getItem(PL_LEAGUES_CACHE)||'null'); return c||null; } catch(e){return null;}
@@ -3096,9 +3097,8 @@ async function setSport(sport) {
   if (S.sport === 'tt') S._ttPlayer = S.player;
   S.sport = sport;
   S.currentLeague = ''; // reset league filter (leagues are sport-specific)
-  // Clear sport-specific caches
-  try { localStorage.removeItem('pl_players'); } catch {}
-  try { localStorage.removeItem('pl_global_recent'); } catch {}
+  // Clear only the match-history cache (sport-specific); player cache is keyed per-sport so no clear needed
+  try { localStorage.removeItem(`pl_global_recent_${S.sport}`); } catch {}
   updateSportBar();
   // Switch default match mode
   if (sport === 'padel') {
@@ -3108,13 +3108,27 @@ async function setSport(sport) {
     _matchMode = 'classic';
     selectMatchMode('classic');
   }
-  // Load players for new sport
+  // ── Instant feedback: paint from sport-specific cache if available ──────
+  const cachedNow = getCachedPlayers(); // key is now 'pl_v1_padel' or 'pl_v1_tt'
+  if (cachedNow) {
+    S.players = cachedNow;
+    const uid = S.user?.id || S.player?.user_id;
+    const pd = uid ? (S.players.find(p => p.user_id === uid) || null) : null;
+    applyPlayerData(pd, S.user);
+    renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
+    showView('profile');
+  } else {
+    // No cache yet: navigate instantly, show a spinner while data loads
+    showView('profile');
+    const container = $el('profile-view-content');
+    if (container) container.innerHTML = '<div style="text-align:center;padding:3rem 1rem;color:var(--text-muted)"><div class="spinner" style="width:2rem;height:2rem;margin:0 auto .75rem"></div><div style="font-size:.9rem">Lade…</div></div>';
+  }
+  // Always refresh from DB in the background
   await loadPlayers();
   const uid = S.user?.id || S.player?.user_id;
   const pd = uid ? (S.players.find(p => p.user_id === uid) || null) : null;
   applyPlayerData(pd, S.user);
   renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
-  // Re-render profile view
   showView('profile');
 }
 
@@ -3141,7 +3155,7 @@ function registerForPadel() {
 function refreshProfileMatches() {
   if (!S.player) return;
   // Clear both caches so the next render truly re-fetches from DB
-  try { localStorage.removeItem('pl_global_recent'); } catch {}
+  try { localStorage.removeItem(`pl_global_recent_${S.sport}`); } catch {}
   try { localStorage.removeItem(`pl_hist_${S.player.id}`);   } catch {}
   // Spin the button while loading
   const btn = $el('pv-refresh-btn');
@@ -3370,7 +3384,7 @@ async function renderProfileView() {
 
   // ── Stale-while-revalidate: paint from cache instantly, update silently ──
   const _histCacheKey   = `pl_hist_${p.id}`;
-  const _matchCacheKey  = 'pl_global_recent';
+  const _matchCacheKey  = `pl_global_recent_${S.sport}`;
 
   function _applyHistData(pts) {
     _eloHistMain = pts;
