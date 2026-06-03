@@ -3067,7 +3067,6 @@ function updateSportBar() {
 
 async function setSport(sport) {
   if (S.sport === sport) return;
-  if (!S.user) return; // not logged in yet
   // Remember TT player for name re-use when creating padel profile
   if (S.sport === 'tt') S._ttPlayer = S.player;
   S.sport = sport;
@@ -3086,25 +3085,25 @@ async function setSport(sport) {
   }
   // Load players for new sport
   await loadPlayers();
-  const pd = S.players.find(p => p.user_id === S.user.id) || null;
+  const uid = S.user?.id || S.player?.user_id;
+  const pd = uid ? (S.players.find(p => p.user_id === uid) || null) : null;
   applyPlayerData(pd, S.user);
   renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
-  // Re-render current view (profile or ranking)
-  const activeView = document.querySelector('.view.active');
-  if (!activeView || activeView.id === 'view-profile') {
-    showView('profile'); renderProfileView();
-  }
+  // Re-render profile view
+  showView('profile');
 }
 
 function registerForPadel() {
-  if (!S.user) return;
   // Re-use name/club from TT profile so user doesn't have to re-enter it
-  const ref = S._ttPlayer;
+  const ref = S._ttPlayer || S.player;
+  const uid   = S.user?.id   || ref?.user_id;
+  const email = S.user?.email || '';
+  if (!uid) { toast('Bitte erst einloggen', 'error'); return; }
   OB.pendingUser = {
-    id:    S.user.id,
-    name:  ref?.name  || S.user.email?.split('@')[0] || 'Spieler',
+    id:    uid,
+    name:  ref?.name  || email.split('@')[0] || 'Spieler',
     club:  ref?.club  || null,
-    email: S.user.email
+    email: email
   };
   OB.sport   = 'padel';
   OB.step    = 0;
@@ -3664,7 +3663,7 @@ async function obFinish() {
     S.sport = 'padel';
     updateSportBar();
     await loadPlayers();
-    const newPd = S.players.find(p => p.user_id === S.user?.id) || null;
+    const newPd = S.players.find(p => p.user_id === (S.user?.id || OB.pendingUser?.id)) || null;
     applyPlayerData(newPd, S.user);
     renderRanking(); buildMatchSelects(); buildHistoryFilter(); buildH2HSelects();
     showView('profile'); renderProfileView();
