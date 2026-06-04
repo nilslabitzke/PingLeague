@@ -754,6 +754,15 @@
       <label>Stadt <span style="color:var(--text-dim)">(optional)</span></label>
       <input type="text" id="edit-city" placeholder="z.B. München" autocomplete="off">
     </div>
+    <!-- Admin-only: Elo adjustment -->
+    <div id="edit-elo-row" style="display:none;margin-bottom:.75rem">
+      <div style="height:1px;background:var(--border);margin-bottom:.75rem"></div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>⚙️ Elo anpassen <span style="font-size:.72rem;color:var(--text-muted);font-weight:400">(nur Admin)</span></label>
+        <input type="number" id="edit-elo" min="100" max="9999" step="1" placeholder="z.B. 1200" autocomplete="off">
+      </div>
+      <div style="font-size:.72rem;color:var(--text-muted);margin-top:.35rem">Aktuell: <span id="edit-elo-current">—</span> · Minimum: 100</div>
+    </div>
     <div style="display:flex;gap:.5rem">
       <button class="btn btn-secondary btn-full" onclick="closeEditProfile()">Abbrechen</button>
       <button class="btn btn-primary btn-full" id="btn-save-edit" onclick="saveEditProfile()">Speichern</button>
@@ -1279,6 +1288,15 @@ function openEditProfile(playerId) {
   $el('edit-club').value = p.club  || '';
   $el('edit-city').value = p.city  || '';
   $el('edit-alert').innerHTML = '';
+  // Elo field: only visible for admins
+  const eloRow = $el('edit-elo-row');
+  if (eloRow) {
+    eloRow.style.display = S.isAdmin ? '' : 'none';
+    if (S.isAdmin) {
+      $el('edit-elo').value = p.elo || '';
+      $el('edit-elo-current').textContent = p.elo ?? '—';
+    }
+  }
   $el('edit-overlay').classList.add('open');
   setTimeout(() => $el('edit-name').focus(), 120);
 }
@@ -1292,18 +1310,46 @@ async function saveEditProfile() {
     $el('edit-alert').innerHTML = '<div class="alert alert-error">Name darf nicht leer sein.</div>';
     return;
   }
+  // Admin: validate Elo input if provided
+  let newElo = null;
+  if (S.isAdmin) {
+    const eloVal = parseInt($el('edit-elo')?.value);
+    if ($el('edit-elo')?.value !== '' && (!Number.isFinite(eloVal) || eloVal < 100 || eloVal > 9999)) {
+      $el('edit-alert').innerHTML = '<div class="alert alert-error">Elo muss zwischen 100 und 9999 liegen.</div>';
+      return;
+    }
+    const currentElo = byId(playerId)?.elo;
+    if (Number.isFinite(eloVal) && eloVal !== currentElo) newElo = eloVal;
+  }
+
   const btn = $el('btn-save-edit');
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Speichern…';
+
+  // Update profile (name/club/city)
   const { error } = await db.rpc('update_player_profile', {
     p_player_id: playerId, p_name: name, p_club: club, p_city: city
   });
-  btn.disabled = false; btn.innerHTML = 'Speichern';
   if (error) {
+    btn.disabled = false; btn.innerHTML = 'Speichern';
     $el('edit-alert').innerHTML = `<div class="alert alert-error">${esc(error.message)}</div>`;
     return;
   }
+
+  // Admin: also update Elo if it changed
+  if (newElo !== null) {
+    const { error: eloErr } = await db.rpc('admin_set_player_elo', {
+      p_player_id: playerId, p_elo: newElo
+    });
+    if (eloErr) {
+      btn.disabled = false; btn.innerHTML = 'Speichern';
+      $el('edit-alert').innerHTML = `<div class="alert alert-error">Elo-Fehler: ${esc(eloErr.message)}</div>`;
+      return;
+    }
+  }
+
+  btn.disabled = false; btn.innerHTML = 'Speichern';
   closeEditProfile();
-  toast('Profil aktualisiert ✓', 'success');
+  toast(newElo !== null ? `Profil & Elo (→ ${newElo}) aktualisiert ✓` : 'Profil aktualisiert ✓', 'success');
   await loadPlayers();
   if (S.player?.id === playerId) {
     S.player = byId(playerId) || S.player;
