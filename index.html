@@ -546,6 +546,7 @@
             <button class="mode-btn" id="mode-btn-21er" onclick="selectMatchMode('21er')">✨ 21er<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">1 Satz · bis 21</span></button>
             <button class="mode-btn" id="mode-btn-grand_slam" onclick="selectMatchMode('grand_slam')">🎾 Grand Slam<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">Best of 5 · bis 11</span></button>
             <button class="mode-btn" id="mode-btn-risky_seven" onclick="selectMatchMode('risky_seven')">🃏 Risky Seven<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">1 Satz · bis 7</span></button>
+            <button class="mode-btn" id="mode-btn-koenig" onclick="selectMatchMode('koenig')">👑 König<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">3 Spieler · Kronen</span></button>
           </div>
           <div id="padel-modes" style="display:none;gap:.5rem;flex-wrap:wrap">
             <button class="mode-btn active" id="mode-btn-padel_standard" onclick="selectMatchMode('padel_standard')">🎾 Standard<span style="display:block;font-size:.7rem;font-weight:400;opacity:.8">Best of 3 · bis 6</span></button>
@@ -566,7 +567,38 @@
         </div>
         <!-- Padel doubles Elo preview (populated by JS) -->
         <div class="card" id="doubles-elo-preview" style="display:none"></div>
-        <div class="card">
+        <!-- König crown-entry form (hidden until mode selected) -->
+        <div class="card" id="koenig-form" style="display:none">
+          <div class="card-title">👑 Spieler &amp; Kronen eintragen</div>
+          <div style="font-size:.78rem;color:var(--text-muted);margin-bottom:.85rem">Trag die Kronenzahl jedes Spielers bei Spielende ein.</div>
+          <div class="form-group" style="margin-bottom:.6rem">
+            <label>Spieler 1</label>
+            <div style="display:flex;gap:.5rem;align-items:center">
+              <select id="kg-mp1" style="flex:1" onchange="onKoenigChange()"></select>
+              <span style="color:var(--text-muted)">👑</span>
+              <input type="number" id="kg-mc1" min="0" max="99" placeholder="0" style="width:64px;text-align:center" oninput="onKoenigChange()">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:.6rem">
+            <label>Spieler 2</label>
+            <div style="display:flex;gap:.5rem;align-items:center">
+              <select id="kg-mp2" style="flex:1" onchange="onKoenigChange()"><option value="">— wählen —</option></select>
+              <span style="color:var(--text-muted)">👑</span>
+              <input type="number" id="kg-mc2" min="0" max="99" placeholder="0" style="width:64px;text-align:center" oninput="onKoenigChange()">
+            </div>
+          </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label>Spieler 3</label>
+            <div style="display:flex;gap:.5rem;align-items:center">
+              <select id="kg-mp3" style="flex:1" onchange="onKoenigChange()"><option value="">— wählen —</option></select>
+              <span style="color:var(--text-muted)">👑</span>
+              <input type="number" id="kg-mc3" min="0" max="99" placeholder="0" style="width:64px;text-align:center" oninput="onKoenigChange()">
+            </div>
+          </div>
+        </div>
+        <!-- König Elo preview (populated by JS) -->
+        <div class="card" id="koenig-elo-card" style="display:none"></div>
+        <div class="card" id="score-card">
           <div class="card-title">Sätze</div>
           <div id="match-alert"></div>
           <div class="score-row" id="set1-row"><div class="score-label">Satz 1</div><div class="score-inputs"><input type="number" id="s1a" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="score-sep">:</span><input type="number" id="s1b" min="0" max="40" placeholder="0" oninput="onScoreInput()"><span class="set-tag" id="s1-tag"></span></div></div>
@@ -610,17 +642,6 @@
 
       <!-- TOURNAMENTS SUB -->
       <div id="sub-tournaments" class="sub-content">
-        <!-- König Mode (TT only) -->
-        <div class="card" id="koenig-card" style="margin-bottom:1rem">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem">
-            <div>
-              <div class="card-title" style="margin-bottom:.15rem">👑 König</div>
-              <div style="font-size:.78rem;color:var(--text-muted)">3 Spieler · 7 Kronen zum Sieg</div>
-            </div>
-            <button class="btn btn-primary btn-sm" onclick="openKoenig()" id="btn-start-koenig">▶ Spiel starten</button>
-          </div>
-          <div id="koenig-recent" style="font-size:.82rem;color:var(--text-muted)">Keine König-Spiele bisher.</div>
-        </div>
         <div class="card">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem">
             <div class="card-title" style="margin-bottom:0">🏆 Turniere</div>
@@ -793,35 +814,6 @@
 </div>
 
 <!-- MATCH LIST SHEET (Siege / Niederlagen detail) -->
-<!-- KÖNIG SETUP OVERLAY -->
-<div class="tr-overlay" id="kg-setup-overlay" onclick="if(event.target===this)closeKoenigSetup()">
-  <div class="tr-sheet" style="max-width:380px">
-    <div style="font-size:.95rem;font-weight:800;text-align:center;margin-bottom:.75rem">👑 König – Spieler wählen</div>
-    <div style="font-size:.8rem;color:var(--text-muted);text-align:center;margin-bottom:1rem;line-height:1.5">
-      Spieler 1 startet als König · Spieler 2 &amp; 3 sind Herausforderer
-    </div>
-    <div id="kg-setup-alert"></div>
-    <div class="form-group"><label>👑 König (startet)</label><select id="kg-p1"><option value="">— Spieler wählen —</option></select></div>
-    <div class="form-group"><label>⚔️ Herausforderer 1 (aktiv)</label><select id="kg-p2"><option value="">— Spieler wählen —</option></select></div>
-    <div class="form-group" style="margin-bottom:1rem"><label>⚔️ Herausforderer 2 (wartend)</label><select id="kg-p3"><option value="">— Spieler wählen —</option></select></div>
-    <div style="display:flex;gap:.5rem">
-      <button class="btn btn-secondary btn-full" onclick="closeKoenigSetup()">Abbrechen</button>
-      <button class="btn btn-success btn-full" onclick="launchKoenig()">▶ Starten</button>
-    </div>
-  </div>
-</div>
-
-<!-- KÖNIG GAME OVERLAY (fullscreen) -->
-<div class="tr-overlay" id="kg-overlay" style="align-items:stretch;padding:0">
-  <div style="background:var(--bg);width:100%;max-width:480px;margin:0 auto;height:100%;overflow-y:auto;display:flex;flex-direction:column">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:.9rem 1rem .5rem;border-bottom:1px solid var(--border)">
-      <div style="font-size:.9rem;font-weight:800">👑 König</div>
-      <button onclick="confirmCloseKoenig()" style="background:none;border:none;color:var(--text-muted);font-size:1.1rem;cursor:pointer;padding:.1rem .35rem">✕</button>
-    </div>
-    <div id="kg-content" style="flex:1;padding:1rem"></div>
-  </div>
-</div>
-
 <div class="tr-overlay" id="matchlist-overlay" onclick="if(event.target===this)closeMatchList()">
   <div class="tr-sheet" style="max-width:440px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
@@ -1023,6 +1015,27 @@ function selectMatchMode(mode) {
   const cfg = MATCH_MODES[mode];
   Object.keys(MATCH_MODES).forEach(m => $el(`mode-btn-${m}`)?.classList.toggle('active', m === mode));
   $el('match-mode-desc').textContent = cfg.desc;
+
+  const isKoenig = mode === 'koenig';
+
+  // Show/hide König form vs normal form sections
+  const kgForm   = $el('koenig-form');
+  const kgElo    = $el('koenig-elo-card');
+  const scoreCard= $el('score-card');
+  const singlesEl= $el('singles-players');
+  const eloPreview= $el('elo-preview');
+  if (kgForm)    kgForm.style.display    = isKoenig ? '' : 'none';
+  if (kgElo)     kgElo.style.display     = 'none'; // always hide until data entered
+  if (scoreCard) scoreCard.style.display = isKoenig ? 'none' : '';
+  if (eloPreview) eloPreview.style.display = 'none';
+  // TT singles player selects only visible for non-König TT modes
+  if (singlesEl && S.sport === 'tt') singlesEl.style.display = isKoenig ? 'none' : '';
+
+  if (isKoenig) {
+    buildKoenigSelects();
+    return; // König has its own Elo preview; skip normal preview
+  }
+
   // Reset all inputs + tags
   ['1','2','3','4','5'].forEach(n => {
     const a=$el(`s${n}a`), b=$el(`s${n}b`), t=$el(`s${n}-tag`);
@@ -2235,6 +2248,8 @@ function buildMatchSelects() {
   }
   // Also populate doubles selects if padel
   if (S.sport === 'padel') buildDoublesSelects();
+  // Rebuild König selects if that mode is active
+  if (_matchMode === 'koenig') buildKoenigSelects();
 }
 function refreshP2() {
   const p1id=$el('m-p1').value, p2=$el('m-p2'), prev=p2.value;
@@ -2434,6 +2449,8 @@ function renderMatchPreview(v,w1,w2,need3) {
 async function submitMatch() {
   // Padel is always doubles — route to dedicated function
   if (S.sport === 'padel') { await submitDoublesMatch(); return; }
+  // König mode — route to its own handler
+  if (_matchMode === 'koenig') { await submitKoenigMatchForm(); return; }
   const p1id=$el('m-p1').value, p2id=$el('m-p2').value, alEl=$el('match-alert');
   alEl.innerHTML='';
   if (!p1id||!p2id) { alEl.innerHTML='<div class="alert alert-error">Bitte beide Spieler auswählen.</div>'; return; }
@@ -2985,10 +3002,6 @@ function showChallengesSubTab(tab) {
   });
   if (tab === 'tournaments') {
     renderTournamentsSection();
-    // Show/hide König section based on sport
-    const kc = $el('koenig-card');
-    if (kc) kc.style.display = S.sport === 'tt' ? '' : 'none';
-    if (S.sport === 'tt') loadKoenigRecent();
   }
 }
 
@@ -3380,264 +3393,191 @@ function toggleRankingHistory() {
 }
 
 // ── PROFILE VIEW (inline) ─────────────────────────────────────────────────
-// ── KÖNIG GAME MODE ───────────────────────────────────────────────────────
-let KG = null; // live König game state
+// ── KÖNIG MATCH FORM ──────────────────────────────────────────────────────
+function buildKoenigSelects() {
+  const allOpts = S.players.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  const blank   = '<option value="">— wählen —</option>';
 
-function openKoenig() {
-  if (!S.players.length) { toast('Keine Spieler geladen', 'error'); return; }
-  const opts = '<option value="">— Spieler wählen —</option>' +
-    S.players.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
-  ['kg-p1','kg-p2','kg-p3'].forEach(id => {
-    const el = $el(id); if (el) { el.innerHTML = opts; el.value = ''; }
-  });
-  $el('kg-setup-alert').innerHTML = '';
-  // Pre-select own player as king if not admin
-  if (S.player && !S.isAdmin) { const el=$el('kg-p1'); if(el) el.value=S.player.id; }
-  $el('kg-setup-overlay').classList.add('open');
-}
-function closeKoenigSetup() { $el('kg-setup-overlay').classList.remove('open'); }
-
-function launchKoenig() {
-  const p1id=$el('kg-p1').value, p2id=$el('kg-p2').value, p3id=$el('kg-p3').value;
-  const alEl=$el('kg-setup-alert');
-  alEl.innerHTML='';
-  if (!p1id||!p2id||!p3id) { alEl.innerHTML='<div class="alert alert-error">Bitte alle 3 Spieler wählen.</div>'; return; }
-  if (new Set([p1id,p2id,p3id]).size<3) { alEl.innerHTML='<div class="alert alert-error">Alle 3 Spieler müssen verschieden sein.</div>'; return; }
-
-  const king=byId(p1id), chalA=byId(p2id), chalB=byId(p3id);
-  KG = {
-    king: king, chalA: chalA, chalB: chalB,
-    crowns: { [king.id]:0, [chalA.id]:0, [chalB.id]:0 },
-    streak: 0,           // consecutive wins of chalA (active challenger)
-    history: [],         // for undo
-    status: 'playing',
-    winner: null,
-    TARGET: 7
-  };
-  closeKoenigSetup();
-  $el('kg-overlay').classList.add('open');
-  koenigRender();
-}
-
-function koenigRender() {
-  if (!KG) return;
-  const el = $el('kg-content');
-  if (!el) return;
-
-  if (KG.status === 'finished') {
-    _koenigRenderFinished(el); return;
-  }
-
-  const kCrowns = KG.crowns[KG.king.id] ?? 0;
-  const crownFill = Array.from({length: KG.TARGET}, (_,i) =>
-    `<span style="font-size:1.3rem;transition:opacity .15s">${i < kCrowns ? '👑' : '<span style="opacity:.2;font-size:1.1rem">○</span>'}</span>`
-  ).join('');
-  const streakDots = Array.from({length:2}, (_,i) =>
-    `<span style="font-size:1.1rem;opacity:${i<KG.streak?1:.22}">${i<KG.streak?'⚡':'·'}</span>`
-  ).join('&nbsp;');
-
-  el.innerHTML = `
-    <!-- KING -->
-    <div style="background:linear-gradient(135deg,#6b4c00,#c9922a);border-radius:18px;padding:1.1rem 1rem .9rem;margin-bottom:.85rem;text-align:center;box-shadow:0 4px 20px #c9922a44">
-      <div style="font-size:.65rem;font-weight:900;letter-spacing:.1em;color:#ffd700cc;margin-bottom:.3rem">KÖNIG</div>
-      <div style="font-size:1.2rem;font-weight:800;color:#fff">${esc(KG.king.name)}</div>
-      <div style="margin:.5rem 0 .2rem;display:flex;justify-content:center;flex-wrap:wrap;gap:.1rem">${crownFill}</div>
-      <div style="font-size:.72rem;color:#ffd70099">${kCrowns} / ${KG.TARGET} Kronen</div>
-    </div>
-
-    <!-- CHALLENGERS -->
-    <div style="display:flex;gap:.6rem;margin-bottom:.9rem">
-      <div style="flex:1;background:var(--surface);border:2px solid var(--primary);border-radius:14px;padding:.8rem .7rem;text-align:center">
-        <div style="font-size:.6rem;font-weight:900;letter-spacing:.08em;color:var(--primary);margin-bottom:.25rem">AKTIV ⚔️</div>
-        <div style="font-size:1rem;font-weight:700">${esc(KG.chalA.name)}</div>
-        <div style="margin:.35rem 0 .1rem">${streakDots}</div>
-        <div style="font-size:.68rem;color:var(--text-muted)">${KG.streak}/2 für Thron</div>
-        ${KG.crowns[KG.chalA.id]>0?`<div style="font-size:.68rem;margin-top:.2rem;color:#ffd700">${'👑'.repeat(KG.crowns[KG.chalA.id])}</div>`:''}
-      </div>
-      <div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:.8rem .7rem;text-align:center;opacity:.6">
-        <div style="font-size:.6rem;font-weight:900;letter-spacing:.08em;color:var(--text-muted);margin-bottom:.25rem">WARTEND</div>
-        <div style="font-size:1rem;font-weight:700">${esc(KG.chalB.name)}</div>
-        ${KG.crowns[KG.chalB.id]>0?`<div style="font-size:.68rem;margin-top:.4rem;color:#ffd700">${'👑'.repeat(KG.crowns[KG.chalB.id])}</div>`:''}
-      </div>
-    </div>
-
-    <!-- SCORE BUTTONS -->
-    <div style="display:flex;flex-direction:column;gap:.6rem;margin-bottom:.75rem">
-      <button onclick="koenigScore('king')"
-        style="padding:1.1rem;background:linear-gradient(135deg,#6b4c00,#c9922a);color:#fff;border:none;border-radius:14px;font-size:1rem;font-weight:800;cursor:pointer;letter-spacing:.01em;box-shadow:0 3px 12px #c9922a55">
-        👑 ${esc(KG.king.name)} punktet
-      </button>
-      <button onclick="koenigScore('challenger')"
-        style="padding:1.1rem;background:var(--primary);color:#fff;border:none;border-radius:14px;font-size:1rem;font-weight:800;cursor:pointer;letter-spacing:.01em;box-shadow:0 3px 12px var(--primary)55">
-        ⚔️ ${esc(KG.chalA.name)} punktet
-      </button>
-    </div>
-
-    ${KG.history.length>0?`
-    <div style="text-align:center">
-      <button onclick="koenigUndo()" style="background:none;border:1px solid var(--border);color:var(--text-muted);padding:.45rem 1.1rem;border-radius:8px;cursor:pointer;font-size:.85rem">
-        ↩ Rückgängig
-      </button>
-    </div>`:''}
-  `;
-}
-
-function koenigScore(scorer) {
-  if (!KG || KG.status !== 'playing') return;
-  // Save snapshot for undo
-  KG.history.push(JSON.parse(JSON.stringify({
-    king: KG.king, chalA: KG.chalA, chalB: KG.chalB,
-    crowns: KG.crowns, streak: KG.streak
-  })));
-
-  if (scorer === 'king') {
-    // König gewinnt: +1 Krone, dann wartender Herausforderer wird aktiv, Streak reset
-    KG.crowns[KG.king.id] = (KG.crowns[KG.king.id] || 0) + 1;
-    if (KG.crowns[KG.king.id] >= KG.TARGET) {
-      koenigFinish(); return;
-    }
-    // Wechsel: Wartender wird aktiv
-    const tmp = KG.chalA; KG.chalA = KG.chalB; KG.chalB = tmp;
-    KG.streak = 0;
-  } else {
-    // Herausforderer gewinnt
-    KG.streak++;
-    if (KG.streak >= 2) {
-      // Thronwechsel! Aktiver Herausforderer wird König
-      const newKing  = KG.chalA;
-      const newChalA = KG.chalB;   // wartender wird jetzt aktiv
-      const newChalB = KG.king;    // alter König wartet
-      KG.king = newKing;
-      KG.chalA = newChalA;
-      KG.chalB = newChalB;
-      KG.streak = 0;
-      // Prüfen ob neuer König schon 7 Kronen hat (aus früherer Herrschaft)
-      if ((KG.crowns[KG.king.id] || 0) >= KG.TARGET) {
-        koenigFinish(); return;
-      }
+  const mp1 = $el('kg-mp1');
+  if (mp1) {
+    // Player 1: own player locked for non-admins, free for admins
+    if (S.isAdmin) {
+      mp1.disabled = false;
+      mp1.innerHTML = allOpts;
+      if (S.player) mp1.value = S.player.id;
+    } else {
+      mp1.disabled = true;
+      mp1.innerHTML = S.player
+        ? `<option value="${S.player.id}">${esc(S.player.name)}</option>`
+        : '<option value="">—</option>';
     }
   }
-  koenigRender();
+
+  const mp2 = $el('kg-mp2'), mp3 = $el('kg-mp3');
+  if (mp2) { mp2.innerHTML = blank + allOpts; mp2.value = ''; }
+  if (mp3) { mp3.innerHTML = blank + allOpts; mp3.value = ''; }
+
+  // Clear crown inputs
+  ['kg-mc1','kg-mc2','kg-mc3'].forEach(id => { const el=$el(id); if(el) el.value=''; });
+
+  const kgElo = $el('koenig-elo-card');
+  if (kgElo) kgElo.style.display = 'none';
 }
 
-function koenigUndo() {
-  if (!KG || !KG.history.length) return;
-  const prev = KG.history.pop();
-  KG.king = prev.king; KG.chalA = prev.chalA; KG.chalB = prev.chalB;
-  KG.crowns = prev.crowns; KG.streak = prev.streak;
-  koenigRender();
+function onKoenigChange() {
+  // Refresh selects to prevent duplicate choices
+  const v1=$el('kg-mp1')?.value||'', v2=$el('kg-mp2')?.value||'', v3=$el('kg-mp3')?.value||'';
+  _refreshKgSelect('kg-mp2', [v1, v3], v2);
+  _refreshKgSelect('kg-mp3', [v1, v2], v3);
+  updateKoenigEloPreview();
 }
 
-function koenigFinish() {
-  if (!KG) return;
-  KG.status = 'finished';
-  KG.winner = KG.king; // whoever currently has >= 7 crowns is king at this point
-  koenigRender();
+function _refreshKgSelect(selId, exclude, keepVal) {
+  const sel = $el(selId); if (!sel || sel.disabled) return;
+  const prev = keepVal || sel.value;
+  sel.innerHTML = '<option value="">— wählen —</option>' +
+    S.players.filter(p => !exclude.includes(p.id))
+      .map(p => `<option value="${p.id}" ${p.id===prev?'selected':''}>${esc(p.name)}</option>`)
+      .join('');
 }
 
-function _koenigRenderFinished(el) {
-  const winner = KG.winner;
-  const losers = [KG.chalA, KG.chalB].concat(KG.king.id !== winner.id ? [KG.king] : [])
-    .filter(p => p.id !== winner.id).slice(0, 2);
-  // Pad to 2 losers (shouldn't happen, but safety)
-  while (losers.length < 2) losers.push(losers[0]);
+function calcKoenigElo(players) {
+  // players: [{player, crowns}, ...] (exactly 3)
+  // Pairwise: K/(n-1) per pairing — total max gain ≈ one normal match
+  const n = players.length;
+  const changes = players.map(() => 0);
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const pi = players[i], pj = players[j];
+      const eij = expected(pi.player.elo, pj.player.elo);
+      const eji = 1 - eij;
+      const sij = pi.crowns > pj.crowns ? 1 : pi.crowns < pj.crowns ? 0 : 0.5;
+      const sji = 1 - sij;
+      const ki = (pi.player.matches < 30 ? S.settings.k_high : S.settings.k_low) / (n - 1);
+      const kj = (pj.player.matches < 30 ? S.settings.k_high : S.settings.k_low) / (n - 1);
+      changes[i] += ki * (sij - eij);
+      changes[j] += kj * (sji - eji);
+    }
+  }
+  return changes.map(c => Math.round(c));
+}
 
-  // Elo calculation: winner vs avg of the two losers
-  const avgLosersElo = Math.round((losers[0].elo + losers[1].elo) / 2);
-  const avgLosersM   = Math.floor((losers[0].matches + losers[1].matches) / 2);
-  const eloRaw  = calcElo(winner.elo, avgLosersElo, winner.matches, avgLosersM);
-  const gain    = eloRaw.gain;
-  const lossEach = Math.max(1, Math.round(gain / 2)); // zero-sum: 2 losers × half = winner's gain
+function updateKoenigEloPreview() {
+  const kgElo = $el('koenig-elo-card');
+  if (!kgElo) return;
 
-  KG._eloResult = {
-    winner, losers, gain, lossEach,
-    wNew:  Math.max(ELO_MIN, winner.elo + gain),
-    l1New: Math.max(ELO_MIN, losers[0].elo - lossEach),
-    l2New: Math.max(ELO_MIN, losers[1].elo - lossEach),
-  };
+  const ids = [$el('kg-mp1')?.value, $el('kg-mp2')?.value, $el('kg-mp3')?.value];
+  const crowns = [
+    parseInt($el('kg-mc1')?.value || '0', 10) || 0,
+    parseInt($el('kg-mc2')?.value || '0', 10) || 0,
+    parseInt($el('kg-mc3')?.value || '0', 10) || 0
+  ];
 
-  const crowns = KG.crowns[winner.id] ?? KG.TARGET;
-  el.innerHTML = `
-    <div style="text-align:center;padding:.5rem 0 1rem">
-      <div style="font-size:3rem;margin-bottom:.5rem">👑</div>
-      <div style="font-size:1.3rem;font-weight:900;margin-bottom:.25rem">${esc(winner.name)}</div>
-      <div style="font-size:.85rem;color:var(--text-muted);margin-bottom:1.25rem">hat gewonnen mit ${crowns} Kronen!</div>
+  if (!ids[0] || !ids[1] || !ids[2] || new Set(ids).size < 3) {
+    kgElo.style.display = 'none'; return;
+  }
 
-      <div class="elo-grid" style="margin-bottom:1.25rem">
-        <div class="elo-tile">
-          <div class="elo-tile-label">${esc(winner.name)}</div>
-          <div class="elo-tile-val pos">+${gain}</div>
-          <div class="elo-tile-sub">→ ${KG._eloResult.wNew}</div>
-        </div>
-        <div class="elo-tile">
-          <div class="elo-tile-label">${esc(losers[0].name)} &amp; ${esc(losers[1].name)}</div>
-          <div class="elo-tile-val neg">−${lossEach}</div>
-          <div class="elo-tile-sub">je Spieler</div>
-        </div>
-      </div>
+  const players = ids.map((id, i) => ({ player: byId(id), crowns: crowns[i] }));
+  if (players.some(p => !p.player)) { kgElo.style.display = 'none'; return; }
 
-      <button class="btn btn-success btn-full" id="btn-save-koenig" onclick="saveKoenig()">
-        💾 Ergebnis speichern
-      </button>
-      <button onclick="confirmCloseKoenig()" style="margin-top:.5rem;background:none;border:none;color:var(--text-muted);font-size:.85rem;cursor:pointer;text-decoration:underline">
-        Ohne Speichern schließen
-      </button>
+  const changes = calcKoenigElo(players);
+
+  kgElo.style.display = '';
+  kgElo.innerHTML = `
+    <div class="card-title" style="margin-bottom:.75rem">👑 Elo-Vorschau</div>
+    <div class="elo-grid" style="grid-template-columns:repeat(3,1fr)">
+      ${players.map((p, i) => {
+        const delta = changes[i];
+        const newElo = Math.max(ELO_MIN, p.player.elo + delta);
+        const cls = delta > 0 ? 'pos' : delta < 0 ? 'neg' : '';
+        const sign = delta > 0 ? '+' : '';
+        return `<div class="elo-tile">
+          <div class="elo-tile-label">${esc(p.player.name)}</div>
+          <div class="elo-tile-val ${cls}">${sign}${delta}</div>
+          <div class="elo-tile-sub">${p.player.elo} → ${newElo}</div>
+        </div>`;
+      }).join('')}
+    </div>
+    <div style="font-size:.72rem;color:var(--text-muted);margin-top:.6rem;text-align:center">
+      👑 Kronen: ${players.map((p,i) => `${esc(p.player.name)} ${crowns[i]}`).join(' · ')}
     </div>
   `;
 }
 
-async function saveKoenig() {
-  if (!KG?._eloResult) return;
-  const {winner, losers, gain, lossEach, wNew, l1New, l2New} = KG._eloResult;
-  const btn = $el('btn-save-koenig'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span>';
-  const {error} = await db.rpc('submit_koenig_match', {
-    p_winner_id:        winner.id,
-    p_loser1_id:        losers[0].id,
-    p_loser2_id:        losers[1].id,
-    p_elo_winner_before: winner.elo,    p_elo_winner_after: wNew,
-    p_elo_loser1_before: losers[0].elo, p_elo_loser1_after: l1New,
-    p_elo_loser2_before: losers[1].elo, p_elo_loser2_after: l2New,
-    p_elo_delta: gain,
-    p_crowns: KG.crowns[winner.id] ?? KG.TARGET
-  });
-  if (error) {
-    btn.disabled=false; btn.innerHTML='💾 Ergebnis speichern';
-    toast('Fehler: ' + error.message, 'error'); return;
+async function submitKoenigMatchForm() {
+  const alEl = $el('match-alert') || document.createElement('div');
+  alEl.innerHTML = '';
+
+  const ids = [$el('kg-mp1')?.value, $el('kg-mp2')?.value, $el('kg-mp3')?.value];
+  const crowns = [
+    parseInt($el('kg-mc1')?.value || '0', 10) || 0,
+    parseInt($el('kg-mc2')?.value || '0', 10) || 0,
+    parseInt($el('kg-mc3')?.value || '0', 10) || 0
+  ];
+
+  if (!ids[0] || !ids[1] || !ids[2]) {
+    alEl.innerHTML = '<div class="alert alert-error">Bitte alle 3 Spieler auswählen.</div>'; return;
   }
-  KG = null;
-  $el('kg-overlay').classList.remove('open');
-  toast(`👑 ${esc(winner.name)} gewinnt! +${gain} Elo`, 'success');
-  await loadPlayers();
-  renderRanking(); buildMatchSelects();
-  if (S.player) S.player = byId(S.player.id) || S.player;
-  if ($el('view-profile')?.classList.contains('active')) renderProfileView();
-  loadKoenigRecent();
+  if (new Set(ids).size < 3) {
+    alEl.innerHTML = '<div class="alert alert-error">Alle 3 Spieler müssen verschieden sein.</div>'; return;
+  }
+  if (crowns.every(c => c === 0)) {
+    alEl.innerHTML = '<div class="alert alert-error">Bitte mindestens eine Kronenzahl eintragen.</div>'; return;
+  }
+
+  const players = ids.map((id, i) => ({ player: byId(id), crowns: crowns[i] }));
+  if (players.some(p => !p.player)) {
+    alEl.innerHTML = '<div class="alert alert-error">Spieler nicht gefunden.</div>'; return;
+  }
+
+  const changes = calcKoenigElo(players);
+
+  // Sort by crowns descending to determine winner / losers
+  const sorted = players.map((p, i) => ({ ...p, delta: changes[i] }))
+    .sort((a, b) => b.crowns - a.crowns);
+
+  const winner = sorted[0].player;
+  const loser1 = sorted[1].player;
+  const loser2 = sorted[2].player;
+  const winnerDelta  = sorted[0].delta;
+  const loser1Delta  = sorted[1].delta;
+  const loser2Delta  = sorted[2].delta;
+  const winnerCrowns = sorted[0].crowns;
+
+  const btn = $el('btn-submit-match'); btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Speichern…';
+
+  try {
+    const { error } = await db.rpc('submit_koenig_match', {
+      p_winner_id:          winner.id,
+      p_loser1_id:          loser1.id,
+      p_loser2_id:          loser2.id,
+      p_elo_winner_before:  winner.elo,
+      p_elo_winner_after:   Math.max(ELO_MIN, winner.elo + winnerDelta),
+      p_elo_loser1_before:  loser1.elo,
+      p_elo_loser1_after:   Math.max(ELO_MIN, loser1.elo + loser1Delta),
+      p_elo_loser2_before:  loser2.elo,
+      p_elo_loser2_after:   Math.max(ELO_MIN, loser2.elo + loser2Delta),
+      p_elo_delta:          Math.abs(winnerDelta),
+      p_crowns:             winnerCrowns
+    });
+    if (error) throw error;
+
+    toast(`👑 ${esc(winner.name)} gewinnt! +${winnerDelta} Elo`, 'success');
+    btn.disabled = false; btn.innerHTML = 'Match eintragen';
+    // Reset König form
+    buildKoenigSelects();
+    $el('koenig-elo-card').style.display = 'none';
+    // Refresh player data
+    await loadPlayers();
+    renderRanking(); buildMatchSelects();
+    if (S.player) S.player = byId(S.player.id) || S.player;
+    if ($el('view-profile')?.classList.contains('active')) renderProfileView();
+  } catch(e) {
+    btn.disabled = false; btn.innerHTML = 'Match eintragen';
+    alEl.innerHTML = `<div class="alert alert-error">Fehler: ${esc(e.message)}</div>`;
+  }
 }
 
-function confirmCloseKoenig() {
-  if (KG?.status === 'playing' && KG.history.length > 0) {
-    if (!confirm('Spiel abbrechen? Das Ergebnis wird nicht gespeichert.')) return;
-  }
-  KG = null;
-  $el('kg-overlay').classList.remove('open');
-}
-
-async function loadKoenigRecent() {
-  const el = $el('koenig-recent'); if (!el) return;
-  const {data} = await withTimeout(
-    db.from('matches').select('winner_id,loser_id,loser2_id,elo_delta,played_at')
-      .eq('match_mode','koenig').order('played_at',{ascending:false}).limit(5),
-    8000, {data:null}
-  );
-  if (!data?.length) { el.innerHTML='<span style="color:var(--text-muted)">Keine König-Spiele bisher.</span>'; return; }
-  el.innerHTML = data.map(m => {
-    const w=byId(m.winner_id), l1=byId(m.loser_id), l2=byId(m.loser2_id);
-    return `<div style="display:flex;justify-content:space-between;padding:.35rem 0;border-bottom:1px solid var(--border);font-size:.82rem">
-      <span>👑 ${w?esc(w.name):'?'} vs ${l1?esc(l1.name):'?'} &amp; ${l2?esc(l2.name):'?'}</span>
-      <span style="color:var(--success);font-weight:700">+${m.elo_delta}</span>
-    </div>`;
-  }).join('');
-}
 
 // ── SPORT SWITCHER ────────────────────────────────────────────────────────
 function updateSportBar() {
@@ -3654,6 +3594,13 @@ function updateSportBar() {
   const epEl = $el('elo-preview'), depEl = $el('doubles-elo-preview');
   if (epEl) epEl.style.display = 'none';
   if (depEl) depEl.style.display = 'none';
+  // Hide König form — it only applies to TT
+  const kgForm = $el('koenig-form'), kgElo = $el('koenig-elo-card');
+  if (kgForm) kgForm.style.display = 'none';
+  if (kgElo)  kgElo.style.display  = 'none';
+  // Score card always visible after sport switch (König mode won't persist across switch)
+  const scoreCard = $el('score-card');
+  if (scoreCard) scoreCard.style.display = '';
 }
 
 async function setSport(sport) {
