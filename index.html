@@ -3638,6 +3638,14 @@ function updateSportBar() {
   // Score card always visible after sport switch (König mode won't persist across switch)
   const scoreCard = $el('score-card');
   if (scoreCard) scoreCard.style.display = '';
+  // "Platten" tab is TT-only — hide/show nav buttons accordingly
+  document.querySelectorAll('[data-view="platten"]').forEach(btn => {
+    btn.style.display = isTT ? '' : 'none';
+  });
+  // If currently on the Platten view and switching to Padel, redirect to profile
+  if (!isTT && $el('view-platten')?.classList.contains('active')) {
+    showView('profile');
+  }
 }
 
 async function setSport(sport) {
