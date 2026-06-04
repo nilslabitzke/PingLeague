@@ -610,6 +610,17 @@
 
       <!-- TOURNAMENTS SUB -->
       <div id="sub-tournaments" class="sub-content">
+        <!-- König Mode (TT only) -->
+        <div class="card" id="koenig-card" style="margin-bottom:1rem">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem">
+            <div>
+              <div class="card-title" style="margin-bottom:.15rem">👑 König</div>
+              <div style="font-size:.78rem;color:var(--text-muted)">3 Spieler · 7 Kronen zum Sieg</div>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openKoenig()" id="btn-start-koenig">▶ Spiel starten</button>
+          </div>
+          <div id="koenig-recent" style="font-size:.82rem;color:var(--text-muted)">Keine König-Spiele bisher.</div>
+        </div>
         <div class="card">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.9rem">
             <div class="card-title" style="margin-bottom:0">🏆 Turniere</div>
@@ -782,6 +793,35 @@
 </div>
 
 <!-- MATCH LIST SHEET (Siege / Niederlagen detail) -->
+<!-- KÖNIG SETUP OVERLAY -->
+<div class="tr-overlay" id="kg-setup-overlay" onclick="if(event.target===this)closeKoenigSetup()">
+  <div class="tr-sheet" style="max-width:380px">
+    <div style="font-size:.95rem;font-weight:800;text-align:center;margin-bottom:.75rem">👑 König – Spieler wählen</div>
+    <div style="font-size:.8rem;color:var(--text-muted);text-align:center;margin-bottom:1rem;line-height:1.5">
+      Spieler 1 startet als König · Spieler 2 &amp; 3 sind Herausforderer
+    </div>
+    <div id="kg-setup-alert"></div>
+    <div class="form-group"><label>👑 König (startet)</label><select id="kg-p1"><option value="">— Spieler wählen —</option></select></div>
+    <div class="form-group"><label>⚔️ Herausforderer 1 (aktiv)</label><select id="kg-p2"><option value="">— Spieler wählen —</option></select></div>
+    <div class="form-group" style="margin-bottom:1rem"><label>⚔️ Herausforderer 2 (wartend)</label><select id="kg-p3"><option value="">— Spieler wählen —</option></select></div>
+    <div style="display:flex;gap:.5rem">
+      <button class="btn btn-secondary btn-full" onclick="closeKoenigSetup()">Abbrechen</button>
+      <button class="btn btn-success btn-full" onclick="launchKoenig()">▶ Starten</button>
+    </div>
+  </div>
+</div>
+
+<!-- KÖNIG GAME OVERLAY (fullscreen) -->
+<div class="tr-overlay" id="kg-overlay" style="align-items:stretch;padding:0">
+  <div style="background:var(--bg);width:100%;max-width:480px;margin:0 auto;height:100%;overflow-y:auto;display:flex;flex-direction:column">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:.9rem 1rem .5rem;border-bottom:1px solid var(--border)">
+      <div style="font-size:.9rem;font-weight:800">👑 König</div>
+      <button onclick="confirmCloseKoenig()" style="background:none;border:none;color:var(--text-muted);font-size:1.1rem;cursor:pointer;padding:.1rem .35rem">✕</button>
+    </div>
+    <div id="kg-content" style="flex:1;padding:1rem"></div>
+  </div>
+</div>
+
 <div class="tr-overlay" id="matchlist-overlay" onclick="if(event.target===this)closeMatchList()">
   <div class="tr-sheet" style="max-width:440px">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
@@ -939,6 +979,7 @@ const MATCH_MODES = {
   risky_seven:    { label:'🃏 Risky Seven',  desc:'1 Satz · bis 7 · bei 6:6 bis +2',                 target:7,  need:1, maxSets:1, eloFactor:0.5, sport:'tt'    },
   padel_standard: { label:'🎾 Padel',        desc:'Best of 3 · Sätze bis 6 · Tiebreak bei 6:6',      target:6,  need:2, maxSets:3, eloFactor:1,   sport:'padel' },
   padel_express:  { label:'🎾 Padel Express',desc:'1 Satz · bis 6 · Tiebreak bei 6:6',               target:6,  need:1, maxSets:1, eloFactor:0.7, sport:'padel' },
+  koenig:         { label:'👑 König',        desc:'3 Spieler · 7 Kronen · 2 in Folge zum Thronwechsel', target:7, need:0, maxSets:0, eloFactor:1,   sport:'tt'    },
 };
 
 // Apply an Elo-factor (e.g. 0.5 for Risky Seven) to a calcElo result
@@ -2942,7 +2983,13 @@ function showChallengesSubTab(tab) {
   document.querySelectorAll('.sub-tab').forEach((btn, i) => {
     btn.classList.toggle('active', (i===0&&tab==='challenges')||(i===1&&tab==='tournaments'));
   });
-  if (tab === 'tournaments') renderTournamentsSection();
+  if (tab === 'tournaments') {
+    renderTournamentsSection();
+    // Show/hide König section based on sport
+    const kc = $el('koenig-card');
+    if (kc) kc.style.display = S.sport === 'tt' ? '' : 'none';
+    if (S.sport === 'tt') loadKoenigRecent();
+  }
 }
 
 async function loadTournaments() {
@@ -3333,6 +3380,265 @@ function toggleRankingHistory() {
 }
 
 // ── PROFILE VIEW (inline) ─────────────────────────────────────────────────
+// ── KÖNIG GAME MODE ───────────────────────────────────────────────────────
+let KG = null; // live König game state
+
+function openKoenig() {
+  if (!S.players.length) { toast('Keine Spieler geladen', 'error'); return; }
+  const opts = '<option value="">— Spieler wählen —</option>' +
+    S.players.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  ['kg-p1','kg-p2','kg-p3'].forEach(id => {
+    const el = $el(id); if (el) { el.innerHTML = opts; el.value = ''; }
+  });
+  $el('kg-setup-alert').innerHTML = '';
+  // Pre-select own player as king if not admin
+  if (S.player && !S.isAdmin) { const el=$el('kg-p1'); if(el) el.value=S.player.id; }
+  $el('kg-setup-overlay').classList.add('open');
+}
+function closeKoenigSetup() { $el('kg-setup-overlay').classList.remove('open'); }
+
+function launchKoenig() {
+  const p1id=$el('kg-p1').value, p2id=$el('kg-p2').value, p3id=$el('kg-p3').value;
+  const alEl=$el('kg-setup-alert');
+  alEl.innerHTML='';
+  if (!p1id||!p2id||!p3id) { alEl.innerHTML='<div class="alert alert-error">Bitte alle 3 Spieler wählen.</div>'; return; }
+  if (new Set([p1id,p2id,p3id]).size<3) { alEl.innerHTML='<div class="alert alert-error">Alle 3 Spieler müssen verschieden sein.</div>'; return; }
+
+  const king=byId(p1id), chalA=byId(p2id), chalB=byId(p3id);
+  KG = {
+    king: king, chalA: chalA, chalB: chalB,
+    crowns: { [king.id]:0, [chalA.id]:0, [chalB.id]:0 },
+    streak: 0,           // consecutive wins of chalA (active challenger)
+    history: [],         // for undo
+    status: 'playing',
+    winner: null,
+    TARGET: 7
+  };
+  closeKoenigSetup();
+  $el('kg-overlay').classList.add('open');
+  koenigRender();
+}
+
+function koenigRender() {
+  if (!KG) return;
+  const el = $el('kg-content');
+  if (!el) return;
+
+  if (KG.status === 'finished') {
+    _koenigRenderFinished(el); return;
+  }
+
+  const kCrowns = KG.crowns[KG.king.id] ?? 0;
+  const crownFill = Array.from({length: KG.TARGET}, (_,i) =>
+    `<span style="font-size:1.3rem;transition:opacity .15s">${i < kCrowns ? '👑' : '<span style="opacity:.2;font-size:1.1rem">○</span>'}</span>`
+  ).join('');
+  const streakDots = Array.from({length:2}, (_,i) =>
+    `<span style="font-size:1.1rem;opacity:${i<KG.streak?1:.22}">${i<KG.streak?'⚡':'·'}</span>`
+  ).join('&nbsp;');
+
+  el.innerHTML = `
+    <!-- KING -->
+    <div style="background:linear-gradient(135deg,#6b4c00,#c9922a);border-radius:18px;padding:1.1rem 1rem .9rem;margin-bottom:.85rem;text-align:center;box-shadow:0 4px 20px #c9922a44">
+      <div style="font-size:.65rem;font-weight:900;letter-spacing:.1em;color:#ffd700cc;margin-bottom:.3rem">KÖNIG</div>
+      <div style="font-size:1.2rem;font-weight:800;color:#fff">${esc(KG.king.name)}</div>
+      <div style="margin:.5rem 0 .2rem;display:flex;justify-content:center;flex-wrap:wrap;gap:.1rem">${crownFill}</div>
+      <div style="font-size:.72rem;color:#ffd70099">${kCrowns} / ${KG.TARGET} Kronen</div>
+    </div>
+
+    <!-- CHALLENGERS -->
+    <div style="display:flex;gap:.6rem;margin-bottom:.9rem">
+      <div style="flex:1;background:var(--surface);border:2px solid var(--primary);border-radius:14px;padding:.8rem .7rem;text-align:center">
+        <div style="font-size:.6rem;font-weight:900;letter-spacing:.08em;color:var(--primary);margin-bottom:.25rem">AKTIV ⚔️</div>
+        <div style="font-size:1rem;font-weight:700">${esc(KG.chalA.name)}</div>
+        <div style="margin:.35rem 0 .1rem">${streakDots}</div>
+        <div style="font-size:.68rem;color:var(--text-muted)">${KG.streak}/2 für Thron</div>
+        ${KG.crowns[KG.chalA.id]>0?`<div style="font-size:.68rem;margin-top:.2rem;color:#ffd700">${'👑'.repeat(KG.crowns[KG.chalA.id])}</div>`:''}
+      </div>
+      <div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:.8rem .7rem;text-align:center;opacity:.6">
+        <div style="font-size:.6rem;font-weight:900;letter-spacing:.08em;color:var(--text-muted);margin-bottom:.25rem">WARTEND</div>
+        <div style="font-size:1rem;font-weight:700">${esc(KG.chalB.name)}</div>
+        ${KG.crowns[KG.chalB.id]>0?`<div style="font-size:.68rem;margin-top:.4rem;color:#ffd700">${'👑'.repeat(KG.crowns[KG.chalB.id])}</div>`:''}
+      </div>
+    </div>
+
+    <!-- SCORE BUTTONS -->
+    <div style="display:flex;flex-direction:column;gap:.6rem;margin-bottom:.75rem">
+      <button onclick="koenigScore('king')"
+        style="padding:1.1rem;background:linear-gradient(135deg,#6b4c00,#c9922a);color:#fff;border:none;border-radius:14px;font-size:1rem;font-weight:800;cursor:pointer;letter-spacing:.01em;box-shadow:0 3px 12px #c9922a55">
+        👑 ${esc(KG.king.name)} punktet
+      </button>
+      <button onclick="koenigScore('challenger')"
+        style="padding:1.1rem;background:var(--primary);color:#fff;border:none;border-radius:14px;font-size:1rem;font-weight:800;cursor:pointer;letter-spacing:.01em;box-shadow:0 3px 12px var(--primary)55">
+        ⚔️ ${esc(KG.chalA.name)} punktet
+      </button>
+    </div>
+
+    ${KG.history.length>0?`
+    <div style="text-align:center">
+      <button onclick="koenigUndo()" style="background:none;border:1px solid var(--border);color:var(--text-muted);padding:.45rem 1.1rem;border-radius:8px;cursor:pointer;font-size:.85rem">
+        ↩ Rückgängig
+      </button>
+    </div>`:''}
+  `;
+}
+
+function koenigScore(scorer) {
+  if (!KG || KG.status !== 'playing') return;
+  // Save snapshot for undo
+  KG.history.push(JSON.parse(JSON.stringify({
+    king: KG.king, chalA: KG.chalA, chalB: KG.chalB,
+    crowns: KG.crowns, streak: KG.streak
+  })));
+
+  if (scorer === 'king') {
+    // König gewinnt: +1 Krone, dann wartender Herausforderer wird aktiv, Streak reset
+    KG.crowns[KG.king.id] = (KG.crowns[KG.king.id] || 0) + 1;
+    if (KG.crowns[KG.king.id] >= KG.TARGET) {
+      koenigFinish(); return;
+    }
+    // Wechsel: Wartender wird aktiv
+    const tmp = KG.chalA; KG.chalA = KG.chalB; KG.chalB = tmp;
+    KG.streak = 0;
+  } else {
+    // Herausforderer gewinnt
+    KG.streak++;
+    if (KG.streak >= 2) {
+      // Thronwechsel! Aktiver Herausforderer wird König
+      const newKing  = KG.chalA;
+      const newChalA = KG.chalB;   // wartender wird jetzt aktiv
+      const newChalB = KG.king;    // alter König wartet
+      KG.king = newKing;
+      KG.chalA = newChalA;
+      KG.chalB = newChalB;
+      KG.streak = 0;
+      // Prüfen ob neuer König schon 7 Kronen hat (aus früherer Herrschaft)
+      if ((KG.crowns[KG.king.id] || 0) >= KG.TARGET) {
+        koenigFinish(); return;
+      }
+    }
+  }
+  koenigRender();
+}
+
+function koenigUndo() {
+  if (!KG || !KG.history.length) return;
+  const prev = KG.history.pop();
+  KG.king = prev.king; KG.chalA = prev.chalA; KG.chalB = prev.chalB;
+  KG.crowns = prev.crowns; KG.streak = prev.streak;
+  koenigRender();
+}
+
+function koenigFinish() {
+  if (!KG) return;
+  KG.status = 'finished';
+  KG.winner = KG.king; // whoever currently has >= 7 crowns is king at this point
+  koenigRender();
+}
+
+function _koenigRenderFinished(el) {
+  const winner = KG.winner;
+  const losers = [KG.chalA, KG.chalB].concat(KG.king.id !== winner.id ? [KG.king] : [])
+    .filter(p => p.id !== winner.id).slice(0, 2);
+  // Pad to 2 losers (shouldn't happen, but safety)
+  while (losers.length < 2) losers.push(losers[0]);
+
+  // Elo calculation: winner vs avg of the two losers
+  const avgLosersElo = Math.round((losers[0].elo + losers[1].elo) / 2);
+  const avgLosersM   = Math.floor((losers[0].matches + losers[1].matches) / 2);
+  const eloRaw  = calcElo(winner.elo, avgLosersElo, winner.matches, avgLosersM);
+  const gain    = eloRaw.gain;
+  const lossEach = Math.max(1, Math.round(gain / 2)); // zero-sum: 2 losers × half = winner's gain
+
+  KG._eloResult = {
+    winner, losers, gain, lossEach,
+    wNew:  Math.max(ELO_MIN, winner.elo + gain),
+    l1New: Math.max(ELO_MIN, losers[0].elo - lossEach),
+    l2New: Math.max(ELO_MIN, losers[1].elo - lossEach),
+  };
+
+  const crowns = KG.crowns[winner.id] ?? KG.TARGET;
+  el.innerHTML = `
+    <div style="text-align:center;padding:.5rem 0 1rem">
+      <div style="font-size:3rem;margin-bottom:.5rem">👑</div>
+      <div style="font-size:1.3rem;font-weight:900;margin-bottom:.25rem">${esc(winner.name)}</div>
+      <div style="font-size:.85rem;color:var(--text-muted);margin-bottom:1.25rem">hat gewonnen mit ${crowns} Kronen!</div>
+
+      <div class="elo-grid" style="margin-bottom:1.25rem">
+        <div class="elo-tile">
+          <div class="elo-tile-label">${esc(winner.name)}</div>
+          <div class="elo-tile-val pos">+${gain}</div>
+          <div class="elo-tile-sub">→ ${KG._eloResult.wNew}</div>
+        </div>
+        <div class="elo-tile">
+          <div class="elo-tile-label">${esc(losers[0].name)} &amp; ${esc(losers[1].name)}</div>
+          <div class="elo-tile-val neg">−${lossEach}</div>
+          <div class="elo-tile-sub">je Spieler</div>
+        </div>
+      </div>
+
+      <button class="btn btn-success btn-full" id="btn-save-koenig" onclick="saveKoenig()">
+        💾 Ergebnis speichern
+      </button>
+      <button onclick="confirmCloseKoenig()" style="margin-top:.5rem;background:none;border:none;color:var(--text-muted);font-size:.85rem;cursor:pointer;text-decoration:underline">
+        Ohne Speichern schließen
+      </button>
+    </div>
+  `;
+}
+
+async function saveKoenig() {
+  if (!KG?._eloResult) return;
+  const {winner, losers, gain, lossEach, wNew, l1New, l2New} = KG._eloResult;
+  const btn = $el('btn-save-koenig'); btn.disabled=true; btn.innerHTML='<span class="spinner"></span>';
+  const {error} = await db.rpc('submit_koenig_match', {
+    p_winner_id:        winner.id,
+    p_loser1_id:        losers[0].id,
+    p_loser2_id:        losers[1].id,
+    p_elo_winner_before: winner.elo,    p_elo_winner_after: wNew,
+    p_elo_loser1_before: losers[0].elo, p_elo_loser1_after: l1New,
+    p_elo_loser2_before: losers[1].elo, p_elo_loser2_after: l2New,
+    p_elo_delta: gain,
+    p_crowns: KG.crowns[winner.id] ?? KG.TARGET
+  });
+  if (error) {
+    btn.disabled=false; btn.innerHTML='💾 Ergebnis speichern';
+    toast('Fehler: ' + error.message, 'error'); return;
+  }
+  KG = null;
+  $el('kg-overlay').classList.remove('open');
+  toast(`👑 ${esc(winner.name)} gewinnt! +${gain} Elo`, 'success');
+  await loadPlayers();
+  renderRanking(); buildMatchSelects();
+  if (S.player) S.player = byId(S.player.id) || S.player;
+  if ($el('view-profile')?.classList.contains('active')) renderProfileView();
+  loadKoenigRecent();
+}
+
+function confirmCloseKoenig() {
+  if (KG?.status === 'playing' && KG.history.length > 0) {
+    if (!confirm('Spiel abbrechen? Das Ergebnis wird nicht gespeichert.')) return;
+  }
+  KG = null;
+  $el('kg-overlay').classList.remove('open');
+}
+
+async function loadKoenigRecent() {
+  const el = $el('koenig-recent'); if (!el) return;
+  const {data} = await withTimeout(
+    db.from('matches').select('winner_id,loser_id,loser2_id,elo_delta,played_at')
+      .eq('match_mode','koenig').order('played_at',{ascending:false}).limit(5),
+    8000, {data:null}
+  );
+  if (!data?.length) { el.innerHTML='<span style="color:var(--text-muted)">Keine König-Spiele bisher.</span>'; return; }
+  el.innerHTML = data.map(m => {
+    const w=byId(m.winner_id), l1=byId(m.loser_id), l2=byId(m.loser2_id);
+    return `<div style="display:flex;justify-content:space-between;padding:.35rem 0;border-bottom:1px solid var(--border);font-size:.82rem">
+      <span>👑 ${w?esc(w.name):'?'} vs ${l1?esc(l1.name):'?'} &amp; ${l2?esc(l2.name):'?'}</span>
+      <span style="color:var(--success);font-weight:700">+${m.elo_delta}</span>
+    </div>`;
+  }).join('');
+}
+
 // ── SPORT SWITCHER ────────────────────────────────────────────────────────
 function updateSportBar() {
   ['tt','padel'].forEach(s => $el(`sport-btn-${s}`)?.classList.toggle('active', s === S.sport));
