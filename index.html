@@ -12,6 +12,8 @@
   <link rel="apple-touch-icon" href="/PingLeague/icon.svg">
   <script>(function(){var t=localStorage.getItem('pl_theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');})()</script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
@@ -355,6 +357,19 @@
       .h2h-selects { grid-template-columns:1fr; }
       .h2h-vs { display:none; }
     }
+    /* TT-MAP VIEW */
+    #tt-map { height:calc(100svh - 230px); min-height:380px; border-radius:var(--radius); overflow:hidden; z-index:0; }
+    .map-header-bar { display:flex; align-items:center; justify-content:space-between; margin-bottom:.75rem; }
+    .map-header-bar h2 { font-size:1.2rem; font-weight:700; }
+    .map-source-note { font-size:.72rem; color:var(--text-muted); margin-top:.5rem; text-align:center; }
+    .map-source-note a { color:var(--primary-lt); text-decoration:none; }
+    .leaflet-popup-content-wrapper { background:var(--card) !important; color:var(--text) !important; border:1px solid var(--border) !important; border-radius:12px !important; box-shadow:0 4px 16px #0006 !important; }
+    .leaflet-popup-tip { background:var(--card) !important; }
+    .leaflet-popup-content { margin:.7rem .85rem !important; }
+    .leaflet-control-zoom a { background:var(--card) !important; color:var(--text) !important; border-color:var(--border) !important; }
+    .leaflet-control-zoom a:hover { background:var(--card-hover) !important; }
+    .map-locate-btn { position:absolute; bottom:1.2rem; right:.7rem; z-index:1000; background:var(--card); border:1px solid var(--border); color:var(--text); padding:.55rem .75rem; border-radius:10px; font-size:1.1rem; cursor:pointer; box-shadow:0 2px 8px #0004; line-height:1; }
+    .map-locate-btn:hover { background:var(--card-hover); }
   </style>
 </head>
 <body>
@@ -444,6 +459,7 @@
         <button class="nav-btn" data-view="ranking" onclick="showView('ranking')">Rangliste</button>
         <button class="nav-btn" data-view="match" onclick="showView('match')">Match</button>
         <button class="nav-btn" data-view="challenges" onclick="showView('challenges')">⚔️ Challenges<span class="ch-badge" id="ch-badge-top"></span></button>
+        <button class="nav-btn" data-view="platten" onclick="showView('platten')">🏓 Platten</button>
         <button class="nav-btn" data-view="admin" id="admin-nav" style="display:none" onclick="showView('admin')">Admin<span class="ch-badge" id="admin-report-badge-top"></span></button>
       </nav>
       <div class="user-area">
@@ -465,6 +481,7 @@
       <button class="bnav-btn" data-view="ranking" onclick="showView('ranking')"><span class="bnav-icon">🏆</span>Liga</button>
       <button class="bnav-btn" data-view="match" onclick="showView('match')"><span class="bnav-icon">➕</span>Match</button>
       <button class="bnav-btn" data-view="challenges" onclick="showView('challenges')"><span class="bnav-icon">⚔️</span>Challenge<span class="ch-badge" id="ch-badge-bottom"></span></button>
+      <button class="bnav-btn" data-view="platten" onclick="showView('platten')"><span class="bnav-icon">🗺️</span>Platten</button>
       <button class="bnav-btn" data-view="admin" id="bottom-admin-btn" style="display:none" onclick="showView('admin')"><span class="bnav-icon">⚙️</span>Admin<span class="ch-badge" id="admin-report-badge-bottom"></span></button>
     </div>
   </div>
@@ -686,6 +703,25 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- PLATTEN-KARTE -->
+    <div id="view-platten" class="view">
+      <div class="map-header-bar">
+        <h2>🏓 Platten in Halle</h2>
+        <a href="https://pingpongmap.net" target="_blank" rel="noopener"
+           style="font-size:.8rem;color:var(--primary-lt);text-decoration:none;white-space:nowrap">
+          🌍 Weltkarte ↗
+        </a>
+      </div>
+      <div style="position:relative">
+        <div id="tt-map"></div>
+        <button class="map-locate-btn" onclick="ttMapLocate()" title="Meinen Standort anzeigen">📍</button>
+      </div>
+      <p class="map-source-note">
+        38 Standorte · Datenquelle: <a href="https://www.google.com/maps/d/u/0/edit?mid=1m30PaszXjp54CnXPxIv79Z63fHxvFyI2" target="_blank" rel="noopener">Google Maps Community</a>
+        · Mehr Platten weltweit auf <a href="https://pingpongmap.net" target="_blank" rel="noopener">pingpongmap.net</a>
+      </p>
     </div>
   </main>
 </div>
@@ -3360,6 +3396,7 @@ function showView(id) {
   if(id==='profile'){renderProfileView();}
   else if(id==='ranking'){loadPlayers().then(renderRanking);}
   else if(id==='admin'){renderAdminPlayers(); loadAdminReports();}
+  else if(id==='platten'){initTTMap();}
   else if(id==='challenges'){
     // Render from cache immediately, refresh in background
     renderChallengesView();
@@ -4347,6 +4384,129 @@ init();
         .catch(function(err) { console.warn('[SW] Registration failed:', err); });
     });
   }
+</script>
+
+<!-- ── TT-PLATTEN KARTE ──────────────────────────────────────────────────── -->
+<script>
+const TT_TABLES = [
+  { lat:51.4312082, lng:11.959891,  name:"Am Hohen Ufer",                 area:"Elsteraue",              desc:"Hier stehen 2 Tischtennisplatten.", tables:2 },
+  { lat:51.4904252, lng:11.9596696, name:"Am Kirchtor",                   area:"Nördliche Innenstadt",   desc:"Hier steht eine Tischtennisplatte.", tables:1 },
+  { lat:51.4441479, lng:11.9795232, name:"Buchenweg",                     area:"Rosengarten",            desc:"Hier steht eine Tischtennisplatte.", tables:1 },
+  { lat:51.4850623, lng:11.9239278, name:"Carl-Schorlemmer-Ring",         area:"Nördliche Neustadt",     desc:"Hier steht eine Tischtennisplatte.", tables:1 },
+  { lat:51.4978365, lng:11.964173,  name:"Ernst-Schneller-Straße",        area:"Giebichenstein",         desc:"Hier steht eine Tischtennisplatte.", tables:1 },
+  { lat:51.420145,  lng:12.0038063, name:"Karl-Meißner-Straße",           area:"Osendorf",               desc:"Hier steht eine Tischtennisplatte. Außerdem ist ein schöner Spielplatz mit sehr schöner Landschaft drum herum.", tables:1 },
+  { lat:51.4291002, lng:11.9819419, name:"Karl-Pilger-Straße",            area:"Ammendorf",              desc:"Hier steht eine Tischtennisplatte.", tables:1 },
+  { lat:51.4880383, lng:11.9751906, name:"Ludwig-Stur-Straße",            area:"Nördliche Innenstadt",   desc:"Hier steht eine Tischtennisplatte.", tables:1 },
+  { lat:51.4893533, lng:11.9510216, name:"Peißnitzinsel",                 area:"Saaleaue",               desc:"Hier stehen drei Tischtennisplatten. Zwei davon sind von der gängigen Sorte und eine ist eine T3-Tischtennisplatte.", tables:3 },
+  { lat:51.43816,   lng:11.9657581, name:"Querfurter Straße",             area:"Silberhöhe",             desc:"Hier steht eine Tischtennisplatte.", tables:1 },
+  { lat:51.4954014, lng:11.9719276, name:"Rathenauplatz",                 area:"Paulusviertel",          desc:"Hier steht eine Tischtennisplatte.", tables:1 },
+  { lat:51.4785893, lng:11.9638709, name:"Ratswerder",                    area:"Südliche Innenstadt",    desc:"Hier steht eine schöne Tischtennisplatte.", tables:1 },
+  { lat:51.454171,  lng:11.9553324, name:"Rigaer Straße",                 area:"Gesundbrunnen",          desc:"Hier steht eine Tischtennisplatte.", tables:1 },
+  { lat:51.4551873, lng:11.9550395, name:"Rockendorfer Weg",              area:"Gesundbrunnen",          desc:"Hier steht eine Tischtennisplatte.", tables:1 },
+  { lat:51.4697292, lng:11.9899652, name:"Thüringer Bahnhof (Nord)",      area:"",                      desc:"Hier stehen zwei Tischtennisplatten.", tables:2 },
+  { lat:51.4827468, lng:11.9435484, name:"Unstrutstraße",                 area:"Nördliche Neustadt",     desc:"Hier stehen zwei Tischtennisplatten. Außerdem gibt es noch Sitzgelegenheiten für die begeisterten Zuschauer.", tables:2 },
+  { lat:51.4551591, lng:11.9461773, name:"Wiener Straße",                 area:"Südstadt",               desc:"Hier stehen zwei Tischtennisplatten.", tables:2 },
+  { lat:51.4437821, lng:11.9584761, name:"Willi-Bredel-Straße",           area:"Silberhöhe",             desc:"Hier stehen zwei Tischtennisplatten.", tables:2 },
+  { lat:51.4372115, lng:11.970967,  name:"Zeitzer Straße",                area:"Silberhöhe",             desc:"Hier steht eine Tischtennisplatte.", tables:1 },
+  { lat:51.4466165, lng:11.9766237, name:"Beerenweg",                     area:"Rosengarten",            desc:"Hier steht eine Tischtennisplatte.", tables:1 },
+  { lat:51.4474491, lng:11.9668335, name:"Ouluer Straße",                 area:"Südstadt",               desc:"Hier steht eine Tischtennisplatte.", tables:1 },
+  { lat:51.4694971, lng:11.964063,  name:"Röpziger Straße",               area:"Gesundbrunnen",          desc:"Hier stehen zwei Tischtennisplatten.", tables:2 },
+  { lat:51.5029577, lng:11.9357436, name:"Kiefernweg",                    area:"Kröllwitz",              desc:"Hier steht eine Tischtennisplatte, und daneben befindet sich ein Sandkasten mit Sitzgelegenheiten.", tables:1 },
+  { lat:51.4757005, lng:11.9096876, name:"Theodor-Storm-Straße",          area:"Westliche Neustadt",     desc:"Hier steht eine Tischtennisplatte, jedoch befindet sich die innerhalb einer Schule.", tables:1, restricted:true },
+  { lat:51.4713786, lng:11.9306224, name:"Kirchteichpromenade",           area:"Südpark",                desc:"Hier stehen 3 Tischtennisplatten. Eine neue und 2 ältere aus Stein.", tables:3 },
+  { lat:51.4695766, lng:11.9290205, name:"Telemannstraße",                area:"Südliche Neustadt",      desc:"Hier stehen 2 Platten.", tables:2 },
+  { lat:51.4784352, lng:11.9414688, name:"Trakehnerstraße",               area:"Nördliche Neustadt",     desc:"Diese Platte befindet sich leider auf dem Grundstück einer Erziehungshilfe für Kinder und ist somit nicht öffentlich zugänglich.", tables:1, restricted:true },
+  { lat:51.4853936, lng:11.8909613, name:"Am Heidebad",                   area:"Heide",                  desc:"Hier steht eine Tischtennisplatte, die jedoch nur erreichbar ist, wenn das Heide-Cafe geöffnet hat.", tables:1, restricted:true },
+  { lat:51.5178944, lng:11.9136378, name:"Grundschule Heidestraße",       area:"Heide-Nord",             desc:"Hier stehen 2 Tischtennisplatten, doch es ist uns bisher noch nicht möglich gewesen, zu überprüfen, ob diese Platten frei zugänglich sind.", tables:2, unconfirmed:true },
+  { lat:51.5562585, lng:11.952432,  name:"Marx-Engel-Straße",             area:"Teicha",                 desc:"Hier steht eine Tischtennisplatte.", tables:1 },
+  { lat:51.5009628, lng:11.9593133, name:"Wittekindschule",               area:"Nördliche Innenstadt",   desc:"Hier stehen 2 Tischtennisplatten, doch es konnte noch nicht sichergestellt werden, ob man hier öffentlich rankommt.", tables:2, unconfirmed:true },
+  { lat:51.4867328, lng:11.9818492, name:"Karl Friedrich Friesen Grundschule", area:"",                 desc:"Hier stehen 2 Tischtennisplatten, doch es ist nicht sicher, ob diese öffentlich sind.", tables:2, unconfirmed:true },
+  { lat:51.4801339, lng:11.9370895, name:"Andalusienstraße",              area:"Nördliche Neustadt",     desc:"Hier stehen 2 Platten ohne Netz – eher Tische, aber trotzdem nutzbar.", tables:2 },
+  { lat:51.4985742, lng:11.9286131, name:"Vogelsang",                     area:"Heide Süd",              desc:"Hier steht eine Tischtennisplatte und eine mit 3 Netzen für T3 Ping Pong. Ein Spielplatz ist ebenfalls in der Nähe.", tables:2 },
+  { lat:51.5186656, lng:11.9134067, name:"Zanderweg",                     area:"Heide-Nord",             desc:"Hier steht eine Tischtennisplatte. Leider liegt drum herum etwas Müll.", tables:1 },
+  { lat:51.5112732, lng:11.8866899, name:"Elbestraße",                    area:"Dölau",                  desc:"Hier steht eine Tischtennisplatte.", tables:1 },
+  { lat:51.4754342, lng:11.9725985, name:"Latina, Franckeplatz",          area:"Innenstadt",             desc:"Hier stehen 3 Platten mit ein paar Bänken und einem schönen Platz.", tables:3 },
+  { lat:51.4498168, lng:11.9728745, name:"Elsa-Brändström-Straße",        area:"Südstadt",               desc:"Eine schöne Platte im neu erbauten Wohngebiet. Außerdem ein Spielplatz und Sitzgelegenheiten vorhanden.", tables:1 },
+];
+
+let _ttMap = null;
+let _ttMapLocating = false;
+
+function initTTMap() {
+  if (_ttMap) { _ttMap.invalidateSize(); return; }
+
+  const isDark = !document.documentElement.hasAttribute('data-theme');
+  const tileUrl = isDark
+    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+    : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+
+  _ttMap = L.map('tt-map', { zoomControl:true }).setView([51.481, 11.963], 12);
+  L.tileLayer(tileUrl, {
+    attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · © <a href="https://carto.com/">CARTO</a>',
+    maxZoom: 19
+  }).addTo(_ttMap);
+
+  // Marker icons
+  function makeIcon(color) {
+    return L.divIcon({
+      html: `<div style="background:${color};width:28px;height:28px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 2px 6px #0006;display:flex;align-items:center;justify-content:center"><span style="transform:rotate(45deg);font-size:13px;line-height:28px;width:28px;text-align:center">🏓</span></div>`,
+      className: '',
+      iconSize: [28, 28],
+      iconAnchor: [14, 28],
+      popupAnchor: [0, -30]
+    });
+  }
+  const iconOk   = makeIcon('#7c7cf8');   // primary purple
+  const iconWarn = makeIcon('#f0a500');   // amber – unconfirmed
+  const iconOff  = makeIcon('#e05555');   // red – restricted
+
+  TT_TABLES.forEach(t => {
+    const icon = t.restricted ? iconOff : (t.unconfirmed ? iconWarn : iconOk);
+    const badge = t.restricted
+      ? '<span style="background:#e05555;color:#fff;padding:.1rem .4rem;border-radius:4px;font-size:.7rem;font-weight:700;margin-left:.4rem">⚠️ eingeschränkt</span>'
+      : t.unconfirmed
+        ? '<span style="background:#f0a500;color:#111;padding:.1rem .4rem;border-radius:4px;font-size:.7rem;font-weight:700;margin-left:.4rem">❓ nicht bestätigt</span>'
+        : '';
+    const tableLabel = t.tables > 1 ? `${t.tables} Platten` : '1 Platte';
+    const popupHtml = `
+      <div style="min-width:180px;max-width:240px">
+        <div style="font-weight:800;font-size:.95rem;margin-bottom:.2rem">${t.name}${badge}</div>
+        ${t.area ? `<div style="font-size:.75rem;color:var(--text-muted);margin-bottom:.4rem">${t.area}</div>` : ''}
+        <div style="font-size:.82rem;line-height:1.45;margin-bottom:.45rem">${t.desc}</div>
+        <div style="font-size:.72rem;color:var(--primary-lt);font-weight:600">🏓 ${tableLabel}</div>
+      </div>`;
+    L.marker([t.lat, t.lng], { icon }).addTo(_ttMap).bindPopup(popupHtml, { maxWidth:260 });
+  });
+
+  // Legend
+  const legend = L.control({ position: 'bottomleft' });
+  legend.onAdd = function() {
+    const div = L.DomUtil.create('div');
+    div.style.cssText = 'background:var(--card);border:1px solid var(--border);border-radius:10px;padding:.5rem .75rem;font-size:.72rem;line-height:1.7;color:var(--text);box-shadow:0 2px 8px #0004';
+    div.innerHTML = `
+      <span style="color:#7c7cf8">●</span> Öffentlich zugänglich<br>
+      <span style="color:#f0a500">●</span> Nicht bestätigt<br>
+      <span style="color:#e05555">●</span> Eingeschränkt / privat`;
+    return div;
+  };
+  legend.addTo(_ttMap);
+}
+
+function ttMapLocate() {
+  if (!_ttMap || _ttMapLocating) return;
+  _ttMapLocating = true;
+  _ttMap.locate({ setView:true, maxZoom:15 });
+  _ttMap.once('locationfound', e => {
+    _ttMapLocating = false;
+    L.circleMarker(e.latlng, {
+      radius:10, color:'#40d8f8', fillColor:'#40d8f8', fillOpacity:.35, weight:2
+    }).addTo(_ttMap).bindPopup('📍 Dein Standort').openPopup();
+  });
+  _ttMap.once('locationerror', () => {
+    _ttMapLocating = false;
+    toast('Standort konnte nicht ermittelt werden', 'error');
+  });
+}
 </script>
 </body>
 </html>
