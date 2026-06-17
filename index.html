@@ -530,7 +530,7 @@
           <div class="card-title">Spieler</div>
           <div id="singles-players">
             <div class="form-group"><label>Spieler 1</label><select id="m-p1" onchange="onPlayerChange()"></select></div>
-            <div class="form-group"><label>Spieler 2 (Gegner)</label><select id="m-p2" onchange="onPlayerChange()"><option value="">— Gegner auswählen —</option></select></div>
+            <div class="form-group"><label>Spieler 2 (Gegner)</label><select id="m-p2" onchange="onP2Change()"><option value="">— Gegner auswählen —</option></select></div>
           </div>
         </div>
         <div class="card" style="padding:1rem 1.25rem">
@@ -2227,7 +2227,10 @@ function refreshP2() {
   const p1id=$el('m-p1').value, p2=$el('m-p2'), prev=p2.value;
   p2.innerHTML='<option value="">— Gegner auswählen —</option>'+S.players.filter(p=>p.id!==p1id).map(p=>`<option value="${p.id}" ${p.id===prev?'selected':''}>${esc(p.name)}${fmtClub(p)?` (${esc(fmtClub(p))})`:''}</option>`).join('');
 }
-function onPlayerChange() { refreshP2(); updateEloPreview(); }
+// Called when Spieler 1 changes: re-filter opponent list, then update previews
+function onPlayerChange() { refreshP2(); updateEloPreview(); onScoreInput(); }
+// Called when Spieler 2 (Gegner) changes: do NOT rebuild p2 dropdown (avoids onchange loop)
+function onP2Change() { updateEloPreview(); onScoreInput(); }
 
 function updateEloPreview() {
   const p1=byId($el('m-p1').value), p2=byId($el('m-p2').value), card=$el('elo-preview');
