@@ -932,8 +932,8 @@ function calcElo(wElo, lElo, wM, lM) {
   // Standard Elo: both gain and loss use (1 - eW).
   // This means: beating a much weaker player → tiny gain, tiny loss for them.
   // Losing to a much weaker player → huge penalty (= what you would have gained if you'd won).
-  const gain = Math.round(kW * (1 - eW));
-  const loss = Math.round(kL * (1 - eW)); // was kL * eW — that was wrong
+  const gain = Math.max(1, Math.round(kW * (1 - eW)));
+  const loss = Math.max(1, Math.round(kL * (1 - eW)));
   return {
     wNew: Math.max(ELO_MIN, wElo + gain),
     lNew: Math.max(ELO_MIN, lElo - loss),
@@ -1064,8 +1064,10 @@ function validSet(a, b) {
   const target = MATCH_MODES[_matchMode]?.target ?? 11;
   const hi = Math.max(a, b), lo = Math.min(a, b);
   if (hi < target || hi - lo < 2) return false;
-  if (lo < target - 1 && hi !== target) return false;
-  return true;
+  // If loser is below deuce range: winner must reach exactly target (no overrun)
+  if (lo < target - 1) return hi === target;
+  // At deuce (both ≥ target-1): winner must lead by exactly 2
+  return hi === lo + 2;
 }
 function setWinner(a, b) { if (!validSet(a, b)) return 0; return Number(a) > Number(b) ? 1 : 2; }
 
@@ -1164,6 +1166,7 @@ function setupRealtime() {
 function teardownRealtime() {
   if (_realtimeChannel) { db.removeChannel(_realtimeChannel); _realtimeChannel = null; }
   if (_refreshDebounce) { clearTimeout(_refreshDebounce); _refreshDebounce = null; }
+  if (teardownRealtime._clearAutoRefresh) { teardownRealtime._clearAutoRefresh(); teardownRealtime._clearAutoRefresh = null; }
 }
 
 // ── LIGEN ────────────────────────────────────────────────────────────────
@@ -1637,23 +1640,23 @@ async function setupUser(user) {
     S.settings = {k_high: cachedSettings.k_high||32, k_low: cachedSettings.k_low||16};
     $el('k-high').value = S.settings.k_high; $el('k-low').value = S.settings.k_low;
   }
-  withTimeout(db.from('settings').select('*').limit(1).maybeSingle(), 5000, {data:null})
-    .then(r => {
-      if (_setupSession !== mySession) return;
-      const sd = r?.data;
-      if (sd) {
-        S.settings = {k_high:sd.k_high||32, k_low:sd.k_low||16};
-        $el('k-high').value = S.settings.k_high; $el('k-low').value = S.settings.k_low;
-        setCachedSettings(S.settings);
-      }
-    }).catch(console.error);
-
-  // ── STEP 2: Fresh data from DB ────────────────────────────────────────
-  const {data: ttData} = await withTimeout(
-    db.from('players').select('*').eq('sport','tt').order('elo',{ascending:false}),
-    15000, {data: null}
-  );
+  // ── STEP 2: Fresh data from DB — players + settings in parallel ──────
+  const [{ data: ttData }, settingsRes] = await Promise.all([
+    withTimeout(
+      db.from('players').select('*').eq('sport','tt').order('elo',{ascending:false}),
+      15000, {data: null}
+    ),
+    withTimeout(db.from('settings').select('*').limit(1).maybeSingle(), 5000, {data:null})
+  ]);
   if (_setupSession !== mySession) return;
+
+  // Apply fresh settings
+  const sd = settingsRes?.data;
+  if (sd) {
+    S.settings = {k_high:sd.k_high||32, k_low:sd.k_low||16};
+    $el('k-high').value = S.settings.k_high; $el('k-low').value = S.settings.k_low;
+    setCachedSettings(S.settings);
+  }
 
   const ttPlayers = ttData || [];
   const ttPd = ttPlayers.find(p => p.user_id === user.id) || null;
@@ -2218,7 +2221,9 @@ function buildMatchSelects() {
       p1.disabled=true;
       p1.innerHTML=S.player?`<option value="${S.player.id}">${esc(S.player.name)}</option>`:'<option>—</option>';
     }
-    refreshP2();
+    // Don't rebuild p2 while user has scores entered — would disrupt mid-entry state
+    const hasScores = !!($el('s1a')?.value || $el('s1b')?.value);
+    if (!hasScores) refreshP2();
   }
   // Rebuild König selects if that mode is active
   if (_matchMode === 'koenig') buildKoenigSelects();
@@ -2230,7 +2235,7 @@ function refreshP2() {
 // Called when Spieler 1 changes: re-filter opponent list, then update previews
 function onPlayerChange() { refreshP2(); updateEloPreview(); onScoreInput(); }
 // Called when Spieler 2 (Gegner) changes: do NOT rebuild p2 dropdown (avoids onchange loop)
-function onP2Change() { updateEloPreview(); onScoreInput(); }
+function onP2Change() { updateEloPreview(); if (_matchMode !== 'koenig') onScoreInput(); }
 
 function updateEloPreview() {
   const p1=byId($el('m-p1').value), p2=byId($el('m-p2').value), card=$el('elo-preview');
@@ -3943,6 +3948,7 @@ function init() {
   db.auth.onAuthStateChange(async(event,session)=>{
     if(event==='SIGNED_OUT'){
       _setupSession++; // abort any in-flight setupUser
+      teardownRealtime(); // close WebSocket, cancel debounce
       S.user=null;S.player=null;S.isAdmin=false;_initialized=false;showPage('auth');
     } else if(event==='PASSWORD_RECOVERY'){
       // User clicked the reset link — show new-password form
@@ -3974,7 +3980,9 @@ function init() {
   });
 
   // Auto-Refresh: alle 2 Minuten — immer, kein Stale-Check nötig (kein Profile-Rerender)
-  setInterval(() => _doRefresh(false), AUTO_REFRESH_MS);
+  let _autoRefreshInterval = setInterval(() => _doRefresh(false), AUTO_REFRESH_MS);
+  // Expose so teardownRealtime can clear it on logout (prevents post-logout ticks)
+  teardownRealtime._clearAutoRefresh = () => { clearInterval(_autoRefreshInterval); };
 }
 init();
 </script>
